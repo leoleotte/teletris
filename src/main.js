@@ -43,15 +43,15 @@ document.body.appendChild(app.view);
 
 
 //Variables
-let left_arrow, right_arrow;
-let blockPiece;
-let blockContainer; //container for all rectangles in the current block piece
-let blocksMatrixSize = {x:10, y:20};
+var left_arrow, right_arrow;
+var blockPiece;
+var blocksMatrixSize = {x:10, y:20};
+linesScore = 0;
 
 let blocksMatrix = [];
-for (let i = 0; i < blocksMatrixSize.x; i++) {
+for (let i = 0; i < this.blocksMatrixSize.x; i++) {
   blocksMatrix[i] = [];
-  for (let j = 0; j < blocksMatrixSize.y; j++) {
+  for (let j = 0; j < this.blocksMatrixSize.y; j++) {
     blocksMatrix[i][j] = 0;
   }
 }
@@ -89,9 +89,14 @@ function setup() {
   this.right_arrow.y = 500;
 
 
-  //Add the buttons to the stage
+  //Add the UI elements
   app.stage.addChild(this.left_arrow);
   app.stage.addChild(this.right_arrow);
+
+  scoreUI = new Text("Lines: " + linesScore);
+  this.scoreUI.position.set(250, 0);
+  app.stage.addChild(this.scoreUI);
+
 
   createBlockPiece();
   
@@ -115,15 +120,15 @@ function main(delta){
 }
 
 function createBlockPiece() {
-  if (blockPiece) {
+  if (this.blockPiece) {
     solidifyBlocksInsideMatrix();
-    app.stage.removeChild(blockPiece.rectangles);
+    app.stage.removeChild(this.blockPiece.rectangles);
     clearLines();
   }
-  blockPiece = new BlockPiece(blockTypes[randomInt(0,1)], 4, 0);
-  app.stage.addChild(blockPiece.rectangles);
+  this.blockPiece = new BlockPiece(blockTypes[randomInt(0,1)], 4, 0);
+  app.stage.addChild(this.blockPiece.rectangles);
 
-  if (blockPiece && checkPieceCollision(0, 0)) {
+  if (this.blockPiece && checkPieceCollision(0, 0)) {
     console.log("GAME OVER");
     //let message = new Text("GAME OVER");
     //app.stage.addChild(message);
@@ -161,20 +166,20 @@ function randomInt(min, max) {
 }
 
 function setMatrixPieceBlocks(value) {
-  blockPiece.matrixPlacements[blockPiece.currentRotation].forEach(block => {
-    blocksMatrix[blockPiece.posX + block.col][blockPiece.posY + block.row] = value;
+  this.blockPiece.matrixPlacements[this.blockPiece.currentRotation].forEach(block => {
+    blocksMatrix[this.blockPiece.posX + block.col][this.blockPiece.posY + block.row] = value;
   });
 }
 
 function checkPieceCollision(offsetX, offsetY) {
   let collision = false;
-  let posx = blockPiece.posX + offsetX;
-  let posy = blockPiece.posY + offsetY;
+  let posx = this.blockPiece.posX + offsetX;
+  let posy = this.blockPiece.posY + offsetY;
 
   //checks for collision with other blocks and stage boundaries
-  blockPiece.matrixPlacements[blockPiece.currentRotation].forEach(block => {
-      if (posx + block.col >= blocksMatrixSize.x || block.col + posx < 0 ||
-          posy + block.row > blocksMatrixSize.y) {
+  this.blockPiece.matrixPlacements[this.blockPiece.currentRotation].forEach(block => {
+      if (posx + block.col >= this.blocksMatrixSize.x || block.col + posx < 0 ||
+          posy + block.row > this.blocksMatrixSize.y) {
         collision = true;
       } else if (blocksMatrix[posx + block.col][posy + block.row]){
         if (blocksMatrix[posx + block.col][posy + block.row]) {
@@ -193,7 +198,7 @@ function movePiece(posX, posY) {
   }
 
   if (canMove) { //clear old positions and fill matrix witch current piece blocks
-    blockPiece.move(posX, posY);
+    this.blockPiece.move(posX, posY);
   } else if (posY > 0) {
     dropPiece();
   }
@@ -205,45 +210,66 @@ function dropPiece() {
   while(!checkPieceCollision(0, 1)) {
     movePiece(0, 1);
   }
-  setMatrixPieceBlocks(blockPiece.blockInfo.id);
+  setMatrixPieceBlocks(this.blockPiece.blockInfo.id);
   createBlockPiece();
 }
 
 //creates sprites for each block of the piece inside the matrix
 function solidifyBlocksInsideMatrix() {
-  blockPiece.matrixPlacements[blockPiece.currentRotation].forEach(block => {
+  this.blockPiece.matrixPlacements[this.blockPiece.currentRotation].forEach(block => {
     let blockSprite = new Graphics();
     blockSprite.lineStyle(2, 0xBBBBBB, 1);
-    blockSprite.beginFill(blockPiece.color);
+    blockSprite.beginFill(this.blockPiece.color);
 
     blockSprite.drawRect(
-      block.col * blockPiece.blockSize, 
-      block.row * blockPiece.blockSize,
-      blockPiece.blockSize, blockPiece.blockSize); //size
+      block.col * this.blockPiece.blockSize, 
+      block.row * this.blockPiece.blockSize,
+      this.blockPiece.blockSize, this.blockPiece.blockSize); //size
 
     blockSprite.endFill();
-    blockSprite.x = blockPiece.posX * blockPiece.blockSize;
-    blockSprite.y = blockPiece.posY * blockPiece.blockSize;
+    blockSprite.x = this.blockPiece.posX * this.blockPiece.blockSize;
+    blockSprite.y = this.blockPiece.posY * this.blockPiece.blockSize;
     app.stage.addChild(blockSprite);
-    blocksMatrix[blockPiece.posX + block.col][blockPiece.posY + block.row] = blockSprite;
+    blocksMatrix[this.blockPiece.posX + block.col][this.blockPiece.posY + block.row] = blockSprite;
   });
 }
 
 function clearLines() {
   let blocksInLine = 0;
-  for(let i = 0; i < blocksMatrixSize.y; i ++) {
-    for (let j = 0; j < blocksMatrixSize.x; j ++) {
-      if (blocksMatrix[j][i]) {
+  for(let line = 0; line <= this.blocksMatrixSize.y; line ++) {
+    for (let j = 0; j < this.blocksMatrixSize.x; j ++) {
+      if (blocksMatrix[j][line]) {
         blocksInLine ++;
       }      
     }
-    if (blocksInLine >= blocksMatrixSize.x - 1) {
-      console.log(blocksInLine);
-      for (let collumn = 0; collumn < blocksMatrixSize.x; collumn ++) {
-        app.stage.removeChild(blocksMatrix[collumn][i]);
-        blocksMatrix[collumn][i] = undefined;
+    if (blocksInLine >= this.blocksMatrixSize.x) {
+      for (let collumn = 0; collumn < this.blocksMatrixSize.x; collumn ++) {
+        app.stage.removeChild(blocksMatrix[collumn][line]);
+        blocksMatrix[collumn][line] = undefined;
       }
+      pullLinesDown(line);
+      addScore(1);
     }
     blocksInLine = 0;
   }
+}
+
+//moves down every line above the deleted one
+function pullLinesDown(index) {
+  for (let line = index; line > 0; line --) {
+    for (let collumn = 0; collumn < this.blocksMatrixSize.x; collumn ++) {
+      blockSprite = blocksMatrix[collumn][line-1];
+      if (blockSprite) {
+        index = line -1;
+        blockSprite.y += this.blockPiece.blockSize;
+        blocksMatrix[collumn][line] = blocksMatrix[collumn][line-1];
+        blocksMatrix[collumn][line-1] = undefined;
+      }
+    }        
+  }
+}
+
+function addScore(score) {
+  this.linesScore += score;
+  this.scoreUI.text = ("Lines: " + this.linesScore);
 }
