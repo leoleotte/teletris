@@ -1,23 +1,30 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const block_piece_1 = require("./block-piece");
-class Main {
-    constructor() {
-        //Pieces Matrix
-        this.blocksMatrix = [];
-        this.blockTypes = [
-            { type: "line", id: 10 },
-            { type: "square", id: 20 },
-            { type: "T", id: 30 },
-            { type: "S", id: 40 },
-            { type: "Z", id: 50 },
-            { type: "left_L", id: 60 },
-            { type: "right_L", id: 70 }
-        ];
-        this.linesScore = 0;
-        //Difficulty
-        this.autoMoveTime = 0;
-        this.autoMoveTimeLimit = 60;
+import { BlockPiece } from "./block-piece";
+
+export class Main {
+    app: PIXI.Application;
+    //Pieces Matrix
+    blocksMatrix = [];
+    blocksMatrixSize: any;
+    blockPiece: any;
+    blockTypes = [
+        { type: "line", id: 10 },
+        { type: "square", id: 20 },
+        { type: "T", id: 30 },
+        { type: "S", id: 40 },
+        { type: "Z", id: 50 },
+        { type: "left_L", id: 60 },
+        { type: "right_L", id: 70 }
+    ];
+    //UI
+    left_arrow: PIXI.Sprite;
+    right_arrow: PIXI.Sprite;
+    scoreUI: any;
+    linesScore: number = 0;
+    //Difficulty
+    autoMoveTime: number = 0;
+    autoMoveTimeLimit: number = 60;
+
+    constructor(){
         var app = new PIXI.Application({
             width: 600,
             height: 600,
@@ -29,6 +36,8 @@ class Main {
         document.addEventListener('keydown', this.keyDownHandler);
         //Add the canvas that Pixi automatically created for you to the HTML document
         document.body.appendChild(app.view);
+
+
         for (var i = 0; i < this.blocksMatrixSize.x; i++) {
             this.blocksMatrix[i] = [];
             for (var j = 0; j < this.blocksMatrixSize.y; j++) {
@@ -40,6 +49,7 @@ class Main {
             .add("rsc/arrows.png")
             .load(this.setup);
     }
+
     //This `setup` function will run when the image has loaded
     setup() {
         var leftArrowTexCache = PIXI.utils.TextureCache["rsc/arrows.png"];
@@ -72,6 +82,7 @@ class Main {
         //Pixi's `ticker` and providing it with a `delta` argument.
         this.app.ticker.add(delta => this.main(delta));
     }
+
     //Main Loop
     main(delta) {
         this.autoMoveTime += delta;
@@ -86,7 +97,7 @@ class Main {
             this.app.stage.removeChild(this.blockPiece.rectangles);
             this.clearLines();
         }
-        this.blockPiece = new block_piece_1.BlockPiece(this.blockTypes[this.randomInt(0, 1)], 4, 0);
+        this.blockPiece = new BlockPiece(this.blockTypes[this.randomInt(0, 1)], 4, 0);
         this.app.stage.addChild(this.blockPiece.rectangles);
         if (this.blockPiece && this.checkPieceCollision(0, 0)) {
             console.log("GAME OVER");
@@ -124,7 +135,7 @@ class Main {
             this.blocksMatrix[this.blockPiece.posX + block.col][this.blockPiece.posY + block.row] = value;
         });
     }
-    checkPieceCollision(offsetX, offsetY) {
+     checkPieceCollision(offsetX, offsetY) {
         var collision = false;
         var posx = this.blockPiece.posX + offsetX;
         var posy = this.blockPiece.posY + offsetY;
@@ -142,7 +153,7 @@ class Main {
         });
         return collision;
     }
-    movePiece(posX, posY) {
+     movePiece(posX, posY) {
         var canMove = true;
         if (this.checkPieceCollision(posX, posY)) {
             canMove = false;
@@ -155,7 +166,7 @@ class Main {
         }
         return canMove;
     }
-    dropPiece() {
+     dropPiece() {
         while (!this.checkPieceCollision(0, 1)) {
             this.movePiece(0, 1);
         }
@@ -214,4 +225,3 @@ class Main {
         this.scoreUI.text = ("Lines: " + this.linesScore);
     }
 }
-exports.Main = Main;

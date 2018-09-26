@@ -1,0 +1,34 @@
+{
+  "name": "teletris",
+  "version": "1.0.0",
+  "description": "A Telegram game inspired by falling blocks",
+  "main": "teletris.js",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/pixi.js": "^4.8.1",
+    "typescript": "^3.0.3"
+  },
+  "scripts": {
+    "start": "npm run serve",
+    "build": "npm run build-ts",
+    "serve": "node dist/server.js",
+    "watch-node": "nodemon dist/server.js",
+    "watch": "concurrently -k -p \"[{name}]\" -n \"Sass,TypeScript,Node\" -c \"yellow.bold,cyan.bold,green.bold\" \"npm run watch-sass\" \"npm run watch-ts\" \"npm run watch-node\"",
+    "test": "jest --forceExit --coverage --verbose",
+    "watch-test": "npm run test -- --watchAll",
+    "build-ts": "tsc",
+    "watch-ts": "tsc -w",
+    "debug": "npm run build && npm run watch-debug",
+    "serve-debug": "nodemon --inspect teletris.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leoleotte/teletris.git"
+  },
+  "author": "Leonardo Leotte",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/leoleotte/teletris/issues"
+  },
+  "homepage": "https://github.com/leoleotte/teletris#readme"
+}
