@@ -1,11 +1,11 @@
 class BlockPiece {
-  constructor(blockInfo, posX, posY) {
+  constructor(blockInfo, posX, posY, blockSize) {
     this.blockInfo = blockInfo;
     this.posX = posX;
-    this.posY = posY;
-    this.blockSize = 20;
+    this.posY = posY;    
     this.currentRotation = 0;
     this.matrixPlacements = [];
+    this.blockSize = blockSize;
     this.initPiece();
   }
 
@@ -23,6 +23,15 @@ class BlockPiece {
       case "square":
         this.matrixPlacements = [
           [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
+          [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
+          [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
+          [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
+        ];
+        this.color = 0xFFFF00;
+      break;
+      case "left_L":
+        this.matrixPlacements = [
+          [{row:1,col:0}, {row:2,col:0}, {row:3,col:0}, {row:3,col:1}],
           [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
           [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
           [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
