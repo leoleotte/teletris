@@ -22,23 +22,20 @@ var blockTypes = [
 var blockPiece;
 var blockSize = 20;
 var blocksMatrixSize = {x:10, y:20};
-let blocksMatrix = [];
-for (let i = 0; i < this.blocksMatrixSize.x; i++) {
-  blocksMatrix[i] = [];
-  for (let j = 0; j < this.blocksMatrixSize.y; j++) {
-    blocksMatrix[i][j] = 0;
-  }
-}
-
+let blocksMatrix;
+//Difficulty
+var autoMoveCurrentTime = 0;
+var level = {score: 0, lines: 0, level: 1, autoMoveTimeLimit: 60, 
+  pointsPerLine: [40, 100, 300, 1200]};
 //UI
 var left_arrow, right_arrow;
 var stageBorderLine;
 var stageBorderDefaultWidth = 4;
 var stageBorderDefaultColor = 0x444444;
-var linesScore = 0;
-//Difficulty
-let autoMoveTime = 0;
-let autoMoveTimeLimit = 60;
+var gameOverTextUI = new Text("GAME OVER");
+var scoreUIText = new Text("Score: 0");
+var levelUIText = new Text("Level: 1");
+var linesUIText = new Text("Lines: 0");
 
 
 //Create a Pixi Application
@@ -74,20 +71,20 @@ function setup() {
 
   this.left_arrow.interactive = true;
   this.left_arrow.buttonMode = true;
-  this.left_arrow.on('pointerdown', onButtonPressLeft);
+  this.left_arrow.on('pointerup', function(k) { keyDownHandler({key: "ArrowLeft"})});
 
   this.right_arrow.interactive = true;
   this.right_arrow.buttonMode = true;
-  this.right_arrow.on('pointerdown', onButtonPressRight);
+  this.right_arrow.on('pointerup', function(k) { keyDownHandler({key: "ArrowRight"})});
 
   //Sprites positions
   this.left_arrow.x = 5;
   this.left_arrow.y = 10;
+  this.left_arrow.alpha = 1;
+
   this.right_arrow.x = 105;
   this.right_arrow.y = 10;
-
-  drawUI();
-  createBlockPiece();
+  this.right_arrow.alpha = 1;
   
   //Render the stage   
   app.renderer.render(app.stage);
@@ -95,14 +92,49 @@ function setup() {
   //Start the game loop by adding the `gameLoop` function to
   //Pixi's `ticker` and providing it with a `delta` argument.
   app.ticker.add(delta => main(delta));
+
+  drawUI();
+  initGame();
+}
+
+function initGame() {
+  if (blocksMatrix) { //if game was restared
+    this.clearLines(true);
+    app.stage.removeChild(this.blockPiece.rectangles);
+    app.stage.removeChild(gameOverTextUI);
+    this.blockPiece = undefined;
+    
+    this.level.score = 0;
+    this.level.level = 1;
+    this.level.lines = 0;
+    this.scoreUIText.text = ("Score: " + this.level.score);
+    this.levelUIText.text = ("Level: " + this.level.level);
+    this.linesUIText.text = ("Lines: " + this.level.lines);
+  }
+
+  blocksMatrix = [];
+  for (let i = 0; i < blocksMatrixSize.x; i++) {
+    blocksMatrix[i] = [];
+  }
+  this.createBlockPiece();
+  this.gameRunning = true;
+}
+
+function endGame() {
+  this.gameRunning = false;
+  this.gameOverTextUI.position.set(20, 450);
+  app.stage.addChild(this.gameOverTextUI);
 }
 
 function drawUI() {
   app.stage.addChild(this.left_arrow);
   app.stage.addChild(this.right_arrow);
-  scoreUI = new Text("Lines: " + this.linesScore);
-  this.scoreUI.position.set(250, 0);
-  app.stage.addChild(this.scoreUI);
+  this.scoreUIText.position.set(220, 00);
+  app.stage.addChild(this.scoreUIText);
+  this.levelUIText.position.set(220, 40);
+  app.stage.addChild(this.levelUIText);
+  this.linesUIText.position.set(220, 80);
+  app.stage.addChild(this.linesUIText);
 
   //stage borders
   let stageBorderPadding = 2;
@@ -110,8 +142,8 @@ function drawUI() {
   stageBorder.lineStyle(stageBorderDefaultWidth, stageBorderDefaultColor, 1);
   stageBorder.moveTo(0, 1);
   stageBorder.lineTo((this.blocksMatrixSize.x * this.blockSize) + stageBorderPadding, 1);
-  stageBorder.lineTo((this.blocksMatrixSize.x * this.blockSize) + stageBorderPadding, (this.blocksMatrixSize.y * this.blockSize) + this.blockSize + stageBorderPadding);
-  stageBorder.lineTo(0, (this.blocksMatrixSize.y * this.blockSize) + this.blockSize + stageBorderPadding);
+  stageBorder.lineTo((this.blocksMatrixSize.x * this.blockSize) + stageBorderPadding, (this.blocksMatrixSize.y * this.blockSize)+ stageBorderPadding);
+  stageBorder.lineTo(0, (this.blocksMatrixSize.y * this.blockSize) + stageBorderPadding);
   stageBorder.lineTo(0, 1);
   stageBorder.x = 0;
   stageBorder.y = 0;
@@ -122,8 +154,8 @@ function drawUI() {
   this.stageBorderLine.lineStyle(stageBorderDefaultWidth, stageBorderDefaultColor, 1);
   this.stageBorderLine.moveTo(0, 1);
   this.stageBorderLine.lineTo((this.blocksMatrixSize.x * this.blockSize) + stageBorderPadding, 1);
-  this.stageBorderLine.lineTo((this.blocksMatrixSize.x * this.blockSize) + stageBorderPadding, (this.blocksMatrixSize.y * this.blockSize) + this.blockSize + stageBorderPadding);
-  this.stageBorderLine.lineTo(0, (this.blocksMatrixSize.y * this.blockSize) + this.blockSize + stageBorderPadding);
+  this.stageBorderLine.lineTo((this.blocksMatrixSize.x * this.blockSize) + stageBorderPadding, (this.blocksMatrixSize.y * this.blockSize) + stageBorderPadding);
+  this.stageBorderLine.lineTo(0, (this.blocksMatrixSize.y * this.blockSize) + stageBorderPadding);
   this.stageBorderLine.lineTo(0, 1);
   this.stageBorderLine.x = 0;
   this.stageBorderLine.y = 0;
@@ -133,14 +165,15 @@ function drawUI() {
 
 //Main Loop
 function main(delta){
-  if (!this.gameRunning) {
+  if (!this.gameRunning || !blockPiece) {
     return;
   }
 
-  autoMoveTime += delta;
-  if (autoMoveTime >= autoMoveTimeLimit) {
+  //block auto movement
+  this.autoMoveCurrentTime += delta;
+  if (this.autoMoveCurrentTime >= this.level.autoMoveTimeLimit) {
     movePiece(0, 1);
-    autoMoveTime = 0;
+    this.autoMoveCurrentTime = 0;
   }
 
   updateUI(delta);
@@ -167,45 +200,41 @@ function createBlockPiece() {
   if (this.blockPiece) {
     solidifyBlocksInsideMatrix();
     app.stage.removeChild(this.blockPiece.rectangles);
-    clearLines();
+    clearLines(false);
   }
-  this.blockPiece = new BlockPiece(this.blockTypes[randomInt(0,2)], 4, 0, this.blockSize);
-  app.stage.addChild(this.blockPiece.rectangles);
+  this.blockPiece = new BlockPiece(this.blockTypes[randomInt(0,6)], 4, 0, this.blockSize);
 
   if (checkPieceCollision(0, 0)) {
-    console.log("GAME OVER");
-    let message = new Text("GAME OVER");
-    app.stage.addChild(message);
-    message.position.set(50, 450);
-    this.gameRunning = false;
-    return false;
+    endGame();
   }
-
+  this.autoMoveCurrentTime = 0;
 }
 
 //////Input
 function keyDownHandler(event) {
-  if(event.keyCode == 39) {
-    onButtonPressRight();
+  if (!gameRunning) {
+    initGame();
+  } else {
+    switch(event.key) {
+      case "ArrowLeft":
+        movePiece(-1, 0);
+      break;
+      case "ArrowRight":
+        movePiece(1, 0);
+      break;
+      case "ArrowUp":
+        dropPiece();
+      break;
+    }
+    //rotation input
+    if (event.key == 'e' || event.key == 'r') {
+      let currentRotation = blockPiece.currentRotation;
+      blockPiece.rotate(blockPiece.getNextRotation(event.key == 'e' ? "left" : "right"));
+      if (checkPieceCollision(0, 0)) {
+        blockPiece.rotate(currentRotation);
+      }
+    }
   }
-  else if(event.keyCode == 37) {
-    onButtonPressLeft();
-  } 
-  else if(event.keyCode == 40) {
-    onButtonPressDown();
-  }
-}
-
-function onButtonPressLeft() {
-  movePiece(-1, 0);
-}
-
-function onButtonPressRight() {
-  movePiece(1, 0);
-}
-
-function onButtonPressDown() {
-  dropPiece();
 }
 
 function randomInt(min, max) {
@@ -226,7 +255,7 @@ function checkPieceCollision(offsetX, offsetY) {
   //checks for collision with other blocks and stage boundaries
   this.blockPiece.matrixPlacements[this.blockPiece.currentRotation].forEach(block => {
       if (posx + block.col >= this.blocksMatrixSize.x || block.col + posx < 0 ||
-          posy + block.row > this.blocksMatrixSize.y) {
+          posy + block.row >= this.blocksMatrixSize.y) {
         collision = true;
       } else if (blocksMatrix[posx + block.col][posy + block.row]){
         if (blocksMatrix[posx + block.col][posy + block.row]) {
@@ -238,10 +267,6 @@ function checkPieceCollision(offsetX, offsetY) {
 }
 
 function movePiece(posX, posY) {
-  if (!this.gameRunning) {
-    return;
-  }
-
   let canMove = true;
 
   if (checkPieceCollision(posX, posY)) {
@@ -258,10 +283,6 @@ function movePiece(posX, posY) {
 }
 
 function dropPiece() {
-  if (!this.gameRunning) {
-    return;
-  }
-
   while(!checkPieceCollision(0, 1)) {
     movePiece(0, 1);
   }
@@ -294,25 +315,43 @@ function solidifyBlocksInsideMatrix() {
   });
 }
 
-function clearLines() {
-  let blocksInLine = 0;
-  for(let line = 0; line <= this.blocksMatrixSize.y; line ++) {
-    for (let j = 0; j < this.blocksMatrixSize.x; j ++) {
-      if (blocksMatrix[j][line]) {
-        blocksInLine ++;
-      }      
+function clearLines(clearAll) {
+  let linesCleared = 0;
+  let blocksPerLine = [];
+  //initialize blocksPerLine array, filling it with max values if 'clearAll' is set
+  for (let row = 0; row < blocksMatrixSize.y; row ++) {
+    blocksPerLine.push(clearAll ? blocksMatrixSize.y : 0);
+  }
+
+  for(let collumn = 0; collumn < this.blocksMatrixSize.x; collumn ++) {
+    if (blocksMatrix[collumn]) {
+      for (let line = 0; line < this.blocksMatrixSize.y; line ++) {
+        if (blocksMatrix[collumn][line]) {
+          blocksPerLine[line] ++;
+        }
+      }
     }
-    if (blocksInLine >= this.blocksMatrixSize.x) {
+  }
+
+  //tests for number of blocks in line, or if it should clear all lines
+  for (let line = 0; line < this.blocksMatrixSize.y; line ++) {
+    if (blocksPerLine[line] >= this.blocksMatrixSize.x) {
       for (let collumn = 0; collumn < this.blocksMatrixSize.x; collumn ++) {
         app.stage.removeChild(blocksMatrix[collumn][line]);
         blocksMatrix[collumn][line] = undefined;
       }
-      pullLinesDown(line);
-      addLinesScore(1);
-
-      setStageBorderStyleEffect(this.stageBorderLine.graphicsData[0].lineWidth + 10, 1);
+      linesCleared ++;
+      //only moves lines down and show effects if it's not cleaning all blocks
+      if (!clearAll) {
+        pullLinesDown(line);  
+        setStageBorderStyleEffect(linesCleared * 10, 1);
+      }
     }
-    blocksInLine = 0;
+  }
+  
+  if (linesCleared > 0) {
+    addLinesScore(linesCleared);
+    linesCleared = 0;
   }
 }
 
@@ -320,9 +359,8 @@ function clearLines() {
 function pullLinesDown(index) {
   for (let line = index; line > 0; line --) {
     for (let collumn = 0; collumn < this.blocksMatrixSize.x; collumn ++) {
-      blockSprite = blocksMatrix[collumn][line-1];
+      blockSprite = blocksMatrix[collumn][line - 1];
       if (blockSprite) {
-        index = line -1;
         blockSprite.y += this.blockPiece.blockSize;
         blocksMatrix[collumn][line] = blocksMatrix[collumn][line-1];
         blocksMatrix[collumn][line-1] = undefined;
@@ -331,9 +369,15 @@ function pullLinesDown(index) {
   }
 }
 
-function addLinesScore(score) {
-  this.linesScore += score;
-  this.scoreUI.text = ("Lines: " + this.linesScore);
+function addLinesScore(lines) {
+  this.level.lines += lines;
+  this.linesUIText.text = ("Lines: " + this.level.lines);
+  
+  this.level.level = Math.floor(this.level.lines / 10) + 1;
+  this.levelUIText.text = ("Level: " + this.level.level);
+
+  this.level.score += this.level.pointsPerLine[lines - 1] * this.level.level;
+  this.scoreUIText.text = ("Score: " + this.level.score);
 }
 
 function setStageBorderStyleEffect(width, alpha) {
