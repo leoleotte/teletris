@@ -8,7 +8,9 @@ var Application = PIXI.Application,
     Sprite = PIXI.Sprite,
     Text = PIXI.Text;
 
+//Game
 var gameRunning = true;
+var inputPointer = {x: 0, y: 0, state: 'stopped' || 'moved'}
 //Pieces
 var blockTypes = [
   {type:"line", id:10}, 
@@ -49,7 +51,9 @@ let app = new Application({
 );
 
 //Keyboard Input Handling
-document.addEventListener('keydown', keyDownHandler);
+document.addEventListener('keydown', inputKeyDown);
+document.addEventListener('pointerdown', inputPointerDown);
+document.addEventListener('pointerup', inputPointerUp);
 
 //Add the canvas that Pixi automatically created for you to the HTML document
 document.body.appendChild(app.view);
@@ -71,11 +75,9 @@ function setup() {
 
   this.left_arrow.interactive = true;
   this.left_arrow.buttonMode = true;
-  this.left_arrow.on('pointerup', function(k) { keyDownHandler({key: "ArrowLeft"})});
 
   this.right_arrow.interactive = true;
   this.right_arrow.buttonMode = true;
-  this.right_arrow.on('pointerup', function(k) { keyDownHandler({key: "ArrowRight"})});
 
   //Sprites positions
   this.left_arrow.x = 5;
@@ -211,7 +213,7 @@ function createBlockPiece() {
 }
 
 //////Input
-function keyDownHandler(event) {
+function inputKeyDown(event) {
   if (!gameRunning) {
     initGame();
   } else {
@@ -228,17 +230,43 @@ function keyDownHandler(event) {
     }
     //rotation input
     if (event.key == 'e' || event.key == 'r') {
-      let currentRotation = blockPiece.currentRotation;
-      blockPiece.rotate(blockPiece.getNextRotation(event.key == 'e' ? "left" : "right"));
-      if (checkPieceCollision(0, 0)) {
-        blockPiece.rotate(currentRotation);
-      }
+      rotatePiece(event.key == 'e' ? "left" : "right");
     }
   }
 }
 
-function randomInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+function inputPointerDown(event) {
+  this.inputPointer = {x: event.x, y: event.y};
+}
+
+function inputPointerUp(event) {
+  let delta = {x: this.inputPointer.x - event.x, y: this.inputPointer.y - event.y};
+  
+  if (event.x >= 400 || event.y >= 600) { //invalid inputs
+    return;
+  }
+
+  //piece drop and soft drop
+  if (delta.y >= 50 || delta.y <= -40) {
+    if (Math.sign(delta.y) > 0) {
+      dropPiece();
+    } else {
+      movePiece(0,1);
+    }
+    return;
+  }
+
+  if (delta.x >= 20 || delta.x <= -20) {
+    rotatePiece(event.key == Math.sign(delta.x) > 0 ? "left" : "right");
+  } else {
+    if (this.inputPointer.x <= 100) {
+      movePiece(-1,0);
+    } else {
+      movePiece(1,0);
+    }
+  }
+
+  this.inputPointer = {x: event.x, y: event.y};
 }
 
 function setMatrixPieceBlocks(value) {
@@ -275,6 +303,9 @@ function movePiece(posX, posY) {
 
   if (canMove) { //clear old positions and fill matrix witch current piece blocks
     this.blockPiece.move(posX, posY);
+    if (posY > 0) { //clears auto-move time when doing a soft-drop
+      this.autoMoveCurrentTime = 0;
+    }
   } else if (posY > 0) {
     dropPiece();
   }
@@ -293,6 +324,14 @@ function dropPiece() {
 
   setMatrixPieceBlocks(this.blockPiece.blockInfo.id);
   createBlockPiece();
+}
+
+function rotatePiece(rotationDirection) {
+  let currentRotation = blockPiece.currentRotation;
+  blockPiece.rotate(blockPiece.getNextRotation(rotationDirection));
+  if (checkPieceCollision(0, 0)) {
+    blockPiece.rotate(currentRotation);
+  }
 }
 
 //creates sprites for each block of the piece inside the matrix
@@ -389,4 +428,8 @@ function setStageBorderStyleEffect(width, alpha) {
   }
   this.stageBorderLine.dirty++;
   this.stageBorderLine.clearDirty++;
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
