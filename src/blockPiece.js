@@ -29,23 +29,23 @@ class BlockPiece {
         ];
         this.color = 0xFFFF00;
       break;
-      case "left_L":
+      case "right_L":
         this.matrixPlacements = [
           [{row:0,col:0}, {row:1,col:0}, {row:1,col:1}, {row:1,col:2}],
           [{row:0,col:2}, {row:0,col:1}, {row:1,col:1}, {row:2,col:1}],
           [{row:1,col:0}, {row:1,col:1}, {row:1,col:2}, {row:2,col:2}], 
           [{row:0,col:1}, {row:1,col:1}, {row:2,col:1}, {row:2,col:0}]
         ];
-        this.color = 0xFFFF00;
+        this.color = 0x0000FF;
       break;
-      case "right_L":
+      case "left_L":
         this.matrixPlacements = [
           [{row:1,col:0}, {row:1,col:1}, {row:1,col:2}, {row:0,col:2}],
           [{row:0,col:1}, {row:1,col:1}, {row:2,col:1}, {row:2,col:2}],
           [{row:2,col:0}, {row:1,col:0}, {row:1,col:1}, {row:1,col:2}], 
           [{row:0,col:0}, {row:0,col:1}, {row:1,col:1}, {row:2,col:1}]
         ];
-        this.color = 0xFF2200;
+        this.color = 0xFFa500;
       break;
       case "T":
         this.matrixPlacements = [
@@ -54,7 +54,7 @@ class BlockPiece {
           [{row:1,col:0}, {row:1,col:1}, {row:1,col:2}, {row:2,col:1}], 
           [{row:0,col:1}, {row:1,col:1}, {row:2,col:1}, {row:1,col:0}]
         ];
-        this.color = 0xBB2200;
+        this.color = 0x800080;
       break;
       case "S":
       this.matrixPlacements = [
@@ -63,7 +63,7 @@ class BlockPiece {
         [{row:2,col:0}, {row:2,col:1}, {row:1,col:1}, {row:1,col:2}],
         [{row:0,col:0}, {row:1,col:0}, {row:1,col:1}, {row:2,col:1}]
       ];
-      this.color = 0x888800;
+      this.color = 0x88AA00;
       break;
       case "Z":
       this.matrixPlacements = [
@@ -72,7 +72,7 @@ class BlockPiece {
         [{row:1,col:0}, {row:1,col:1}, {row:2,col:1}, {row:2,col:2}],
         [{row:0,col:1}, {row:1,col:1}, {row:1,col:0}, {row:2,col:0}]
       ];
-      this.color = 0xFF8866;
+      this.color = 0xFF0000;
       break;
     }
 
@@ -84,7 +84,7 @@ class BlockPiece {
       app.stage.removeChild(this.rectangles);
     }
     this.rectangles = new Graphics();
-    this.rectangles.lineStyle(2, 0xBBBBBB, 1);
+    this.rectangles.lineStyle(3, 0x222200, 1);
 
     this.rectangles.beginFill(this.color);
 
@@ -122,5 +122,9 @@ class BlockPiece {
       nextRotation = 3;
     }
     return nextRotation;
+  }
+
+  delete() {
+    app.stage.removeChild(this.rectangles);
   }
 }

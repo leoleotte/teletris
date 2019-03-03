@@ -10,7 +10,8 @@ var Application = PIXI.Application,
 
 //Game
 var gameRunning = true;
-var inputPointer = {x: 0, y: 0, state: 'stopped' || 'moved'}
+var inputPointer = {x: 0, y: 0}
+var pieceMoved = false;
 //Pieces
 var blockTypes = [
   {type:"line", id:10}, 
@@ -21,8 +22,8 @@ var blockTypes = [
   {type:"S", id:40}, 
   {type:"Z", id:50}
 ];
-var blockPiece;
-var blockSize = 20;
+var blockPiece, nextPiece, holdPiece;
+var blockSize = 30;
 var blocksMatrixSize = {x:10, y:20};
 let blocksMatrix;
 //Difficulty
@@ -30,22 +31,27 @@ var autoMoveCurrentTime = 0;
 var level = {score: 0, lines: 0, level: 1, autoMoveTimeLimit: 60, 
   pointsPerLine: [40, 100, 300, 1200]};
 //UI
-var left_arrow, right_arrow;
 var stageBorderLine;
 var stageBorderDefaultWidth = 4;
 var stageBorderDefaultColor = 0x444444;
-var gameOverTextUI = new Text("GAME OVER");
-var scoreUIText = new Text("Score: 0");
-var levelUIText = new Text("Level: 1");
-var linesUIText = new Text("Lines: 0");
+var textStyle = new PIXI.TextStyle ({
+  fontFamily: "Arial",
+  fontSize: 42,
+  fill: "green"
+});
+var gameOverTextUI = new Text("GAME OVER", textStyle);
+var scoreUIText = new Text("Score: 0", textStyle);
+var levelUIText = new Text("Level: 1", textStyle);
+var linesUIText = new Text("Lines: 0", textStyle);
 
 
 //Create a Pixi Application
 let app = new Application({ 
     width: 600,
-    height: 600,                       
+    height: 800,                     
     antialias: true, 
     transparent: true, 
+    roundPixels: true, 
     resolution: 1
   }
 );
@@ -53,57 +59,37 @@ let app = new Application({
 //Keyboard Input Handling
 document.addEventListener('keydown', inputKeyDown);
 document.addEventListener('pointerdown', inputPointerDown);
+document.addEventListener('pointermove', inputPointerMove);
 document.addEventListener('pointerup', inputPointerUp);
+//window.addEventListener('resize', () => scaleToWindow(app.view));
 
 //Add the canvas that Pixi automatically created for you to the HTML document
 document.body.appendChild(app.view);
 
-//Drawing
-loader
-  .add("rsc/arrow_left.png")
-  .add("rsc/arrow_right.png")
-  .load(setup);
-
-//This `setup` function will run when the image has loaded
-function setup() {
-
-  let leftArrowTexCache = TextureCache["rsc/arrow_left.png"];
-  let rightArrowTexCache = TextureCache["rsc/arrow_right.png"];
-
-  this.left_arrow = new Sprite(leftArrowTexCache);
-  this.right_arrow = new Sprite(rightArrowTexCache);
-
-  this.left_arrow.interactive = true;
-  this.left_arrow.buttonMode = true;
-
-  this.right_arrow.interactive = true;
-  this.right_arrow.buttonMode = true;
-
-  //Sprites positions
-  this.left_arrow.x = 5;
-  this.left_arrow.y = 10;
-  this.left_arrow.alpha = 1;
-
-  this.right_arrow.x = 105;
-  this.right_arrow.y = 10;
-  this.right_arrow.alpha = 1;
-  
-  //Render the stage   
-  app.renderer.render(app.stage);
-
-  //Start the game loop by adding the `gameLoop` function to
-  //Pixi's `ticker` and providing it with a `delta` argument.
-  app.ticker.add(delta => main(delta));
-
-  drawUI();
-  initGame();
+//Add debug build time into the HTML document
+var debug = true;
+var iframe = document.createElement('iframe');
+iframe.src = "../buildtime.html";
+iframe.onerror = function() {debug = false};
+if (debug) {
+  document.body.appendChild(iframe);
 }
 
+//Render the stage
+app.renderer.render(app.stage);
+
+//Start the game loop by adding the `gameLoop` function to
+//Pixi's `ticker` and providing it with a `delta` argument.
+app.ticker.add(delta => main(delta));
+drawUI();
+initGame();
+
 function initGame() {
+  createNextPiece();
   if (blocksMatrix) { //if game was restared
     this.clearLines(true);
-    app.stage.removeChild(this.blockPiece.rectangles);
     app.stage.removeChild(gameOverTextUI);
+    this.blockPiece.delete();
     this.blockPiece = undefined;
     
     this.level.score = 0;
@@ -124,19 +110,30 @@ function initGame() {
 
 function endGame() {
   this.gameRunning = false;
-  this.gameOverTextUI.position.set(20, 450);
+  this.gameOverTextUI.position.set(20, 10);
   app.stage.addChild(this.gameOverTextUI);
+  this.nextPiece.delete();
+
+  this.stageBorderLine.graphicsData[0].lineColor = "0xFF0000";
+  setStageBorderStyleEffect(10, 1);
 }
 
 function drawUI() {
-  app.stage.addChild(this.left_arrow);
-  app.stage.addChild(this.right_arrow);
-  this.scoreUIText.position.set(220, 00);
+  //dynamic
+  this.scoreUIText.position.set(10 * this.blockSize + 20, 00);
   app.stage.addChild(this.scoreUIText);
-  this.levelUIText.position.set(220, 40);
+  this.levelUIText.position.set(10 * this.blockSize + 20, 50);
   app.stage.addChild(this.levelUIText);
-  this.linesUIText.position.set(220, 80);
+  this.linesUIText.position.set(10 * this.blockSize + 20, 100);
   app.stage.addChild(this.linesUIText);
+  //static
+  let staticTextPadding = 10;
+  let nextPieceUIText = new Text("Next", textStyle);
+  nextPieceUIText.position.set(12 * this.blockSize + staticTextPadding, 80 + (blockSize * 3));
+  app.stage.addChild(nextPieceUIText);
+  let holdPieceUIText = new Text("Hold", textStyle);
+  holdPieceUIText.position.set(12 * this.blockSize + staticTextPadding, 310 + (blockSize * 3));
+  app.stage.addChild(holdPieceUIText);
 
   //stage borders
   let stageBorderPadding = 2;
@@ -147,8 +144,6 @@ function drawUI() {
   stageBorder.lineTo((this.blocksMatrixSize.x * this.blockSize) + stageBorderPadding, (this.blocksMatrixSize.y * this.blockSize)+ stageBorderPadding);
   stageBorder.lineTo(0, (this.blocksMatrixSize.y * this.blockSize) + stageBorderPadding);
   stageBorder.lineTo(0, 1);
-  stageBorder.x = 0;
-  stageBorder.y = 0;
   app.stage.addChild(stageBorder);
 
   //stage line to add effects to
@@ -159,19 +154,37 @@ function drawUI() {
   this.stageBorderLine.lineTo((this.blocksMatrixSize.x * this.blockSize) + stageBorderPadding, (this.blocksMatrixSize.y * this.blockSize) + stageBorderPadding);
   this.stageBorderLine.lineTo(0, (this.blocksMatrixSize.y * this.blockSize) + stageBorderPadding);
   this.stageBorderLine.lineTo(0, 1);
-  this.stageBorderLine.x = 0;
-  this.stageBorderLine.y = 0;
   this.stageBorderLine.alpha = 0;
   app.stage.addChild(this.stageBorderLine);
+
+  //next piece border lines
+  let nextPieceBorderLine = new Graphics();
+  nextPieceBorderLine.lineStyle(4, stageBorderDefaultColor, 2);
+  nextPieceBorderLine.moveTo(11 * this.blockSize, 100 + (blockSize * 2));
+  nextPieceBorderLine.lineTo(17 * this.blockSize, 100 + (blockSize * 2));
+  nextPieceBorderLine.lineTo(17 * this.blockSize, 100 + (blockSize * 9));
+  nextPieceBorderLine.lineTo(11 * this.blockSize, 100 + (blockSize * 9));
+  nextPieceBorderLine.lineTo(11 * this.blockSize, 100 + (blockSize * 2));
+  app.stage.addChild(nextPieceBorderLine);
+  //hold piece border lines
+  let holdPieceBorderLine = new Graphics();
+  holdPieceBorderLine.lineStyle(4, stageBorderDefaultColor, 2);
+  holdPieceBorderLine.moveTo(11 * this.blockSize, 300 + (blockSize * 3));
+  holdPieceBorderLine.lineTo(17 * this.blockSize, 300 + (blockSize * 3));
+  holdPieceBorderLine.lineTo(17 * this.blockSize, 450 + (blockSize * 5));
+  holdPieceBorderLine.lineTo(11 * this.blockSize, 450 + (blockSize * 5));
+  holdPieceBorderLine.lineTo(11 * this.blockSize, 300 + (blockSize * 3));
+  app.stage.addChild(holdPieceBorderLine);
 }
 
 //Main Loop
 function main(delta){
   if (!this.gameRunning || !blockPiece) {
+    this.gameOverTextUI.position.set(20 + randomInt(1, 5), blockSize * 8 + randomInt(1, 5));
     return;
   }
 
-  //block auto movement
+  //piece auto movement
   this.autoMoveCurrentTime += delta;
   if (this.autoMoveCurrentTime >= this.level.autoMoveTimeLimit) {
     movePiece(0, 1);
@@ -182,13 +195,6 @@ function main(delta){
 }
 
 function updateUI(delta) {
-  //UI Tutorial Fading
-  if (this.left_arrow.alpha > 0) {
-    this.left_arrow.alpha -= delta * 0.005;
-  }
-  if (this.right_arrow.alpha > 0) {
-    this.right_arrow.alpha -= delta * 0.005;
-  }
   //stage borders "drop" effect
   if (this.stageBorderLine.graphicsData[0].lineWidth >= this.stageBorderDefaultWidth) {
     this.setStageBorderStyleEffect(this.stageBorderLine.graphicsData[0].lineWidth - delta, this.stageBorderLine.alpha);
@@ -201,37 +207,49 @@ function updateUI(delta) {
 function createBlockPiece() {
   if (this.blockPiece) {
     solidifyBlocksInsideMatrix();
-    app.stage.removeChild(this.blockPiece.rectangles);
+    this.blockPiece.delete();
     clearLines(false);
   }
-  this.blockPiece = new BlockPiece(this.blockTypes[randomInt(0,6)], 4, 0, this.blockSize);
+  
+  let nextBlockType = this.blockTypes.find(type => type.id == this.nextPiece.blockInfo.id);
+  this.blockPiece = new BlockPiece(nextBlockType, 4, 0, this.blockSize);
 
   if (checkPieceCollision(0, 0)) {
     endGame();
   }
+  
+  createNextPiece();
   this.autoMoveCurrentTime = 0;
+}
+
+function createNextPiece() {
+  if (this.nextPiece) {
+    this.nextPiece.delete();
+  }
+  this.nextPiece = new BlockPiece(this.blockTypes[randomInt(0,6)], 12, 8, this.blockSize);
 }
 
 //////Input
 function inputKeyDown(event) {
-  if (!gameRunning) {
+  if (!gameRunning) { //restarts the game if it's over
     initGame();
-  } else {
-    switch(event.key) {
-      case "ArrowLeft":
-        movePiece(-1, 0);
-      break;
-      case "ArrowRight":
-        movePiece(1, 0);
-      break;
-      case "ArrowUp":
-        dropPiece();
-      break;
-    }
-    //rotation input
-    if (event.key == 'e' || event.key == 'r') {
-      rotatePiece(event.key == 'e' ? "left" : "right");
-    }
+    return;
+  }
+
+  switch(event.key) {
+    case "ArrowLeft":
+      movePiece(-1, 0);
+    break;
+    case "ArrowRight":
+      movePiece(1, 0);
+    break;
+    case "ArrowUp":
+      dropPiece();
+    break;
+  }
+  //rotation input
+  if (event.key == 'e' || event.key == 'r') {
+    rotatePiece(event.key == 'e' ? "left" : "right");
   }
 }
 
@@ -239,15 +257,37 @@ function inputPointerDown(event) {
   this.inputPointer = {x: event.x, y: event.y};
 }
 
-function inputPointerUp(event) {
-  let delta = {x: this.inputPointer.x - event.x, y: this.inputPointer.y - event.y};
-  
-  if (event.x >= 400 || event.y >= 600) { //invalid inputs
+function inputPointerMove(event) {
+  let delta = {x: Math.round(this.inputPointer.x - event.x), y: this.inputPointer.y - event.y};
+  if (!gameRunning || delta.y > 10 || delta.y < -10) {
     return;
   }
 
+  // piece movement (drag)
+  if (Math.abs(delta.x) >= 40) {
+    movePiece(Math.sign(-delta.x),0);
+    this.inputPointer = {x: event.x, y: event.y};
+    this.pieceMoved = true;
+  }
+}
+
+function inputPointerUp(event) {
+  //restarts the game if it's over
+  if (!gameRunning) {
+    initGame();
+    return;
+  }
+
+  //prevents the piece from rotating after moving
+  if (this.pieceMoved) {
+    this.pieceMoved = false;
+    return;
+  }
+
+  let delta = {x: this.inputPointer.x - event.x, y: this.inputPointer.y - event.y};
+
   //piece drop and soft drop
-  if (delta.y >= 50 || delta.y <= -40) {
+  if (delta.y >= 50 || delta.y <= -50) {
     if (Math.sign(delta.y) > 0) {
       dropPiece();
     } else {
@@ -256,17 +296,11 @@ function inputPointerUp(event) {
     return;
   }
 
-  if (delta.x >= 20 || delta.x <= -20) {
-    rotatePiece(event.key == Math.sign(delta.x) > 0 ? "left" : "right");
-  } else {
-    if (this.inputPointer.x <= 100) {
-      movePiece(-1,0);
-    } else {
-      movePiece(1,0);
-    }
+  //piece rotation
+  if (delta.x < 20 && delta.x > -20) {
+    let rotationDirection = event.x > blockSize * 5 ? "right" : "left";
+    rotatePiece(rotationDirection);
   }
-
-  this.inputPointer = {x: event.x, y: event.y};
 }
 
 function setMatrixPieceBlocks(value) {
@@ -338,7 +372,7 @@ function rotatePiece(rotationDirection) {
 function solidifyBlocksInsideMatrix() {
   this.blockPiece.matrixPlacements[this.blockPiece.currentRotation].forEach(block => {
     let blockSprite = new Graphics();
-    blockSprite.lineStyle(2, 0xBBBBBB, 1);
+    blockSprite.lineStyle(3, 0x222200, 1);
     blockSprite.beginFill(this.blockPiece.color);
 
     blockSprite.drawRect(
@@ -433,3 +467,9 @@ function setStageBorderStyleEffect(width, alpha) {
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
+
+// Get a ratio for resize in a bounds
+function getRatio(obj, w, h) {
+  let r = Math.min(w / obj.width, h / obj.height);
+  return r;
+};

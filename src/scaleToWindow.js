@@ -56,9 +56,6 @@ function scaleToWindow(canvas, backgroundColor) {
   canvas.style.paddingBottom = 0 + "px";
   canvas.style.display = "block";
 
-  //4. Set the color of the HTML body background
-  document.body.style.backgroundColor = backgroundColor;
-
   //Fix some quirkiness in scaling for Safari
   var ua = navigator.userAgent.toLowerCase();
   if (ua.indexOf("safari") != -1) {
