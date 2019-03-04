@@ -22,10 +22,10 @@ class BlockPiece {
       break;
       case "square":
         this.matrixPlacements = [
-          [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
-          [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
-          [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}],
-          [{row:0,col:1}, {row:0,col:2}, {row:1,col:1}, {row:1,col:2}]
+          [{row:0,col:0}, {row:0,col:1}, {row:1,col:0}, {row:1,col:1}],
+          [{row:0,col:0}, {row:0,col:1}, {row:1,col:0}, {row:1,col:1}],
+          [{row:0,col:0}, {row:0,col:1}, {row:1,col:0}, {row:1,col:1}],
+          [{row:0,col:0}, {row:0,col:1}, {row:1,col:0}, {row:1,col:1}]
         ];
         this.color = 0xFFFF00;
       break;
@@ -122,6 +122,14 @@ class BlockPiece {
       nextRotation = 3;
     }
     return nextRotation;
+  }
+
+  getCurrentLanes() {
+    let lanes = [];
+    for(i = 0; i < 4; i++) {
+      lanes[i] = this.matrixPlacements[this.currentRotation][i].col;
+    }
+    return lanes;
   }
 
   delete() {
