@@ -11,11 +11,13 @@ var Application = PIXI.Application,
 //Game
 var gameRunning = true;
 var inputPointer = { x: 0, y: 0 }
-var pieceMoved = false;
 var pointerDown = true;
+var canHold = true;
 var fastFalling = false;
 var canFastFall = true;
 var fastFallTick = 0;
+var keyboardTick = 0;
+var keyboardTickDelay = 8;
 //Pieces
 var blockTypes = [
   { type: "line", id: 10 },
@@ -26,7 +28,7 @@ var blockTypes = [
   { type: "S", id: 40 },
   { type: "Z", id: 50 }
 ];
-var blockPiece, nextPiece, blockPieceHold;
+var blockPiece, nextPiece, blockPieceHold, previewBlockPiece;
 var blockSize = 40;
 var blocksMatrixSize = { x: 10, y: 20 };
 let blocksMatrix;
@@ -79,13 +81,9 @@ window.addEventListener('resize', resize);
 //Add the canvas that Pixi automatically created for you to the HTML document
 document.body.appendChild(app.view);
 
-//Add debug build time into the HTML document
-var debug = true;
-var iframe = document.createElement('iframe');
-iframe.src = "../buildtime.html";
-iframe.onerror = function () { debug = false };
+//debug elements
+var debug = false;
 if (debug) {
-  document.body.appendChild(iframe);
   this.debugText = document.getElementById('debugText');
   this.debugText.textContent = "DEBUG";
 }
@@ -128,15 +126,19 @@ function endGame() {
   this.gameRunning = false;
   this.gameOverTextUI.position.set(20, 10);
   app.stage.addChild(this.gameOverTextUI);
-  this.nextPiece.delete();
-  this.blockPieceHold.delete();
-  this.blockPieceHold = null;
+  if (this.nextPiece) {
+    this.nextPiece.delete();
+  }
+  if (this.blockPieceHold) {
+    this.blockPieceHold.delete();
+    this.blockPieceHold = null;
+  }
 
   this.stageBorderLine.graphicsData[0].lineColor = "0xFF0000";
   setStageBorderStyleEffect(10, 1);
 }
 
-function initInput () {
+function initInput() {
   document.addEventListener('keydown', inputKeyDown);
   document.addEventListener('keyup', inputKeyUp);
   document.addEventListener('pointerdown', inputPointerDown);
@@ -159,6 +161,19 @@ function initInput () {
 }
 
 function drawUI() {
+  //hold piece button
+  let holdButton = new Graphics();
+  holdButton.lineStyle(2, 0x555555, 1);
+  holdButton.beginFill(0xCCCCCC);
+  holdButton.drawRect(0, 0, blockSize * 4, blockSize * 7);
+  holdButton.endFill();
+  holdButton.interactive = true;
+  holdButton.button = true;
+  holdButton.x = 12 * this.blockSize - 25;
+  holdButton.y = 230 + (blockSize * 7);
+  holdButton.on("pointerdown", function () { holdPiece() })
+  app.stage.addChild(holdButton);
+
   //dynamic
   this.scoreUIText.position.set(10 * this.blockSize + 20, 00);
   app.stage.addChild(this.scoreUIText);
@@ -224,6 +239,7 @@ function main(delta) {
     return;
   }
 
+  //fastfall 'tick'
   if (!this.canFastFall) {
     this.fastFallTick += delta;
     if (this.fastFallTick >= fastFallLimitTime) {
@@ -233,7 +249,7 @@ function main(delta) {
   }
 
   if (this.fastFalling && this.canFastFall) {
-    movePiece(0, 1);
+    movePiece(this.blockPiece, 0, 1);
     this.autoMoveCurrentTime = 0;
     this.canFastFall = false;
   }
@@ -241,11 +257,21 @@ function main(delta) {
   //piece auto movement
   this.autoMoveCurrentTime += delta;
   if (this.autoMoveCurrentTime >= this.level.autoMoveTimeLimit) {
-    movePiece(0, 1);
+    movePiece(this.blockPiece, 0, 1);
     this.autoMoveCurrentTime = 0;
   }
 
-  updateUI(delta);  
+  //keyboard controls
+  if (this.keyboardMove) {
+    keyboardTick += delta;
+  }
+
+  if (keyboardTick >= keyboardTickDelay) {
+    keyboardTick = 0;
+    movePiece(this.blockPiece, this.keyboardMoveDirection, 0);
+  }
+
+  updateUI(delta);
 }
 
 function updateUI(delta) {
@@ -257,22 +283,26 @@ function updateUI(delta) {
     this.stageBorderLine.alpha -= delta * 0.1;
   }
 
+  //Lane effects on blockPiece lanes
   if (this.blockPiece && this.lanes) {
     for (i = 0; i < 10; i++) {
       lane = this.lanes[i];
       lane.graphicsData[0].fillColor = 0xFFFFFF;
-      if(lane.alpha >= 0.2) {
+      if (lane.alpha >= 0.2) {
         lane.alpha -= 0.15 * delta;
+      }
+      if (lane.graphicsData[0].lineWidth < 5) {
+        lane.graphicsData[0].lineWidth++;
       }
       lane.dirty++;
       lane.clearDirty++;
     };
 
-    //Lane effects on blockPiece lanes
     this.blockPiece.getCurrentLanes().forEach(lane => {
       var lane_ = this.lanes[this.blockPiece.posX + lane];
-      lane_.alpha = 0.3;
+      lane_.alpha = 0.25;
       lane_.graphicsData[0].fillColor = this.blockPiece.color;
+      lane_.graphicsData[0].lineWidth = 1;
       lane_.dirty++;
       lane_.clearDirty++;
     });
@@ -280,16 +310,29 @@ function updateUI(delta) {
 }
 
 function createBlockPiece(hold) {
-  if (this.blockPiece && !hold) {
-    solidifyBlocksInsideMatrix();
+  if (this.blockPiece) {
+    if (!hold) {
+      solidifyBlocksInsideMatrix();
+      clearLines(false);
+      this.canHold = true;
+    }
     this.blockPiece.delete();
-    clearLines(false);
+    this.blockPiece = null;
   }
 
-  let nextBlockType = (hold && this.blockPieceHold) ? this.blockPieceHold.blockInfo.type : this.blockTypes.find(type => type.id == this.nextPiece.blockInfo.id);
+  //chooses between holdPiece or nextPiece for the new blockPiece
+  let nextBlockType = (hold && this.blockPieceHold) ? this.blockPieceHold.blockInfo : this.nextPiece.blockInfo;
   this.blockPiece = new BlockPiece(nextBlockType, 4, 0, this.blockSize);
+  this.blockPiece.active = true;
+  //preview block
+  if (this.previewBlockPiece) {
+    this.previewBlockPiece.delete();
+  }
+  this.previewBlockPiece = new BlockPiece(nextBlockType, 4, 0, this.blockSize);
+  this.previewBlockPiece.alpha = 0.2;
+  this.previewBlockPiece.drawBlocks();
 
-  if (checkPieceCollision(0, 0)) {
+  if (checkPieceCollision(this.blockPiece, 0, 0)) {
     endGame();
   }
 
@@ -298,6 +341,7 @@ function createBlockPiece(hold) {
   }
   this.autoMoveCurrentTime = 0;
   this.currentLane = 4;
+  dropPiece(previewBlockPiece);
 }
 
 function createNextPiece() {
@@ -316,13 +360,17 @@ function inputKeyDown(event) {
 
   switch (event.key) {
     case "ArrowLeft":
-      movePiece(-1, 0);
+      keyboardMoveDirection = -1;
+      keyboardMove = true;
+      keyboardTick = keyboardTickDelay;
       break;
     case "ArrowRight":
-      movePiece(1, 0);
+      keyboardMoveDirection = 1;
+      keyboardMove = true;
+      keyboardTick = keyboardTickDelay;
       break;
     case "ArrowUp":
-      dropPiece();
+      dropPiece(blockPiece);
       break;
     case "ArrowDown":
       fastFalling = true;
@@ -333,45 +381,56 @@ function inputKeyDown(event) {
     rotatePiece(event.key == 'e' ? "left" : "right");
   }
 
-  if(event.key == "d") {
+  if (event.key == "d") {
     holdPiece();
   }
 }
 
 function inputKeyUp(event) {
-  if (event.key == "ArrowDown") {
-    fastFalling = false;    
+  switch (event.key) {
+    case "ArrowLeft":
+      keyboardMove = false;
+      keyboardTick = 3;
+      break;
+    case "ArrowRight":
+      keyboardMove = false;
+      keyboardTick = 3;
+      break;
+    case "ArrowDown":
+      fastFalling = false;
+      break;
   }
 }
 
 function inputPointerDown(event) {
   this.inputPointer = { x: event.x, y: event.y };
+  this.deltaX = this.deltaY = 0;
   this.pointerDown = true;
 }
 
-function inputPointerMove(event) {  
+function inputPointerMove(event) {
   if (!this.inputPointer || !this.pointerDown) {
     return;
   }
+  this.deltaX = this.inputPointer.x - event.x;
+  this.deltaY = this.inputPointer.y - event.y;
 
   let delta = { x: Math.round(this.inputPointer.x - event.x), y: Math.round(this.inputPointer.y - event.y) };
   if (!gameRunning || delta.y > 10) {
-    this.deltaY = this.inputPointer.y - event.y;
-    this.inputPointer = {x: event.x, y: event.y};
+    this.inputPointer = { x: event.x, y: event.y };
     fastFalling = false;
     return;
   }
 
-   // piece movement (drag)
+  // piece movement (drag)
   if (Math.abs(delta.x) >= 30) {
-      movePiece(Math.sign(-delta.x),0);
-      this.inputPointer = {x: event.x, y: event.y};
-      this.pieceMoved = true;
+    movePiece(blockPiece, Math.sign(-delta.x), 0);
+    this.inputPointer = { x: event.x, y: event.y };
   }
 
   //fast fall
   if (delta.y <= -20) {
-    this.inputPointer = {x: event.x, y: event.y};
+    this.inputPointer = { x: event.x, y: event.y };
     fastFalling = true;
   }
 }
@@ -388,25 +447,23 @@ function inputPointerUp(event) {
     return;
   }
 
-  //prevents the piece from rotating after moving
-  if (this.pieceMoved) {
-    this.pieceMoved = false;
-    return;
-  }
-
-  let delta = { x: Math.round(this.inputPointer.x - event.x), y: Math.round(this.inputPointer.y - event.y) };
-
   //piece drop
   if (this.deltaY >= 20) {
     this.deltaY = 0;
-    dropPiece();
+    dropPiece(blockPiece);
   }
 
   //piece rotation
-  if (Math.abs(delta.x) < 20 && Math.abs(delta.y) < 20) {
-    let rotationDirection = event.x > (window.innerWidth / 2) - blockSize * 2 ? "right" : "left";
-    debugText.textContent = rotationDirection;
-    rotatePiece(rotationDirection);
+  if (Math.abs(this.deltaX) < 5 && Math.abs(this.deltaY) < 5) {
+    let rotationDirection = null;
+    if (event.x > (window.innerWidth / 2) - blockSize * 2 && event.x < (window.innerWidth / 2) + blockSize * 2) {
+      rotationDirection = "right";
+    } else if (event.x < (window.innerWidth / 2) - blockSize * 2) {
+      rotationDirection = "left";
+    }
+    if (rotationDirection) {
+      rotatePiece(rotationDirection);
+    }
   }
 }
 
@@ -416,13 +473,13 @@ function setMatrixPieceBlocks(value) {
   });
 }
 
-function checkPieceCollision(offsetX, offsetY) {
+function checkPieceCollision(piece, offsetX, offsetY) {
   let collision = false;
-  let posx = this.blockPiece.posX + offsetX;
-  let posy = this.blockPiece.posY + offsetY;
+  let posx = piece.posX + offsetX;
+  let posy = piece.posY + offsetY;
 
   //checks for collision with other blocks and stage boundaries
-  this.blockPiece.matrixPlacements[this.blockPiece.currentRotation].forEach(block => {
+  piece.matrixPlacements[piece.currentRotation].forEach(block => {
     if (posx + block.col >= this.blocksMatrixSize.x || block.col + posx < 0 ||
       posy + block.row >= this.blocksMatrixSize.y) {
       collision = true;
@@ -435,55 +492,79 @@ function checkPieceCollision(offsetX, offsetY) {
   return collision;
 }
 
-function movePiece(posX, posY) {
+function movePiece(piece, posX, posY) {
   currentLane += posX;
   let canMove = true;
 
-  if (checkPieceCollision(posX, posY)) {
+  if (checkPieceCollision(piece, posX, posY)) {
     canMove = false;
   }
 
   if (canMove) { //clear old positions and fill matrix witch current piece blocks
-    this.blockPiece.move(posX, posY);
+    piece.move(posX, posY);
+
+    //moves preview piece with it
+    this.previewBlockPiece.move(posX, piece.posY - this.previewBlockPiece.posY);
+    dropPiece(this.previewBlockPiece);
+
     if (posY > 0) { //clears auto-move time when doing a soft-drop
       this.autoMoveCurrentTime = 0;
     }
   } else if (posY > 0) {
-    dropPiece();
+    dropPiece(piece);
   }
 
   return canMove;
 }
 
-function dropPiece() {
-  while (!checkPieceCollision(0, 1)) {
-    movePiece(0, 1);
+function dropPiece(piece) {
+  while (!checkPieceCollision(piece, 0, 1)) {
+    if (piece.active) {
+      movePiece(piece, 0, 1);
+    } else {
+      piece.move(0, 1);
+    }
   }
 
   //UI border lines effect
-  setStageBorderStyleEffect(10, 1)
-  this.stageBorderLine.graphicsData[0].lineColor = this.blockPiece.color;
+  if (piece.active) {
+    setStageBorderStyleEffect(10, 1)
+    this.stageBorderLine.graphicsData[0].lineColor = piece.color;
 
-  setMatrixPieceBlocks(this.blockPiece.blockInfo.id);
-  createBlockPiece(false);
+    setMatrixPieceBlocks(piece.blockInfo.id);
+    createBlockPiece(false);
+  }
 }
 
 function rotatePiece(rotationDirection) {
   let currentRotation = blockPiece.currentRotation;
-  blockPiece.rotate(blockPiece.getNextRotation(rotationDirection));
-  if (checkPieceCollision(0, 0)) {
+  let nextRotation = blockPiece.getNextRotation(rotationDirection);
+  blockPiece.rotate(nextRotation);
+  if (checkPieceCollision(this.blockPiece, 0, 0)) {
     blockPiece.rotate(currentRotation);
-  }  
+    nextRotation = currentRotation;
+  }
+  //updates the preview block
+  this.previewBlockPiece.rotate(nextRotation);
+  this.previewBlockPiece.move(0, -1);
+  dropPiece(this.previewBlockPiece);
+
+  animateLanesRotation(rotationDirection);
 }
 
 function holdPiece() {
-  let tempBlock = this.blockPiece;
+  if (!this.canHold) {
+    return;
+  }
+  let blockInfo = this.blockPiece.blockInfo;
   createBlockPiece(true);
-  this.blockPieceHold = tempBlock;
-  this.blockPieceHold.posX = 12;
-  this.blockPieceHold.posY = 15;
-  this.blockPieceHold.drawBlocks();
-  
+  if (this.blockPieceHold) {
+    this.blockPieceHold.delete();
+    this.blockPieceHold = null;
+  }
+  this.blockPieceHold = new BlockPiece(blockInfo, 12, 15, this.blockSize);
+  this.canHold = false;
+
 }
 
 //creates sprites for each block of the piece inside the matrix
@@ -534,8 +615,7 @@ function clearLines(clearAll) {
       linesCleared++;
       //only moves lines down and show effects if it's not cleaning all blocks
       if (!clearAll) {
-        pullLinesDown(line);
-        setStageBorderStyleEffect(linesCleared * 10, 1);
+        delayedPullLinesDown(line, linesCleared);
       }
     }
   }
@@ -544,6 +624,12 @@ function clearLines(clearAll) {
     addLinesScore(linesCleared);
     linesCleared = 0;
   }
+}
+
+async function delayedPullLinesDown(line, linesCleared) {
+  await sleep(300);
+  pullLinesDown(line);
+  setStageBorderStyleEffect(linesCleared * 10, 2);
 }
 
 //moves down every line above the deleted one
@@ -582,12 +668,22 @@ function setStageBorderStyleEffect(width, alpha) {
   this.stageBorderLine.clearDirty++;
 }
 
+function animateLanesRotation(direction) {
+  if (direction == "left") {
+    this.lanes[0].alpha = 2;
+    this.lanes[1].alpha = 1.3;
+    this.lanes[2].alpha = 0.8;
+  } else {
+    this.lanes[9].alpha = 2;
+    this.lanes[8].alpha = 1.3;
+    this.lanes[7].alpha = 0.8;
+  }
+}
+
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-// Get a ratio for resize in a bounds
-function getRatio(obj, w, h) {
-  let r = Math.min(w / obj.width, h / obj.height);
-  return r;
-};
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}

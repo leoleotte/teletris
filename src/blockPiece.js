@@ -2,78 +2,80 @@ class BlockPiece {
   constructor(blockInfo, posX, posY, blockSize) {
     this.blockInfo = blockInfo;
     this.posX = posX;
-    this.posY = posY;    
+    this.posY = posY;
     this.currentRotation = 0;
     this.matrixPlacements = [];
     this.blockSize = blockSize;
+    this.alpha = 1;
+    this.active = false;
     this.initPiece();
   }
 
   initPiece() {
-    switch(this.blockInfo.type) {
+    switch (this.blockInfo.type) {
       case "line":
         this.matrixPlacements = [
-          [{row:0,col:1}, {row:1,col:1}, {row:2,col:1}, {row:3,col:1}],
-          [{row:1,col:0}, {row:1,col:1}, {row:1,col:2}, {row:1,col:3}],
-          [{row:0,col:2}, {row:1,col:2}, {row:2,col:2}, {row:3,col:2}],
-          [{row:2,col:0}, {row:2,col:1}, {row:2,col:2}, {row:2,col:3}]
+          [{ row: 0, col: 1 }, { row: 1, col: 1 }, { row: 2, col: 1 }, { row: 3, col: 1 }],
+          [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 1, col: 3 }],
+          [{ row: 0, col: 2 }, { row: 1, col: 2 }, { row: 2, col: 2 }, { row: 3, col: 2 }],
+          [{ row: 2, col: 0 }, { row: 2, col: 1 }, { row: 2, col: 2 }, { row: 2, col: 3 }]
         ];
         this.color = 0x66CCFF;
-      break;
+        break;
       case "square":
         this.matrixPlacements = [
-          [{row:0,col:0}, {row:0,col:1}, {row:1,col:0}, {row:1,col:1}],
-          [{row:0,col:0}, {row:0,col:1}, {row:1,col:0}, {row:1,col:1}],
-          [{row:0,col:0}, {row:0,col:1}, {row:1,col:0}, {row:1,col:1}],
-          [{row:0,col:0}, {row:0,col:1}, {row:1,col:0}, {row:1,col:1}]
+          [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 1, col: 0 }, { row: 1, col: 1 }],
+          [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 1, col: 0 }, { row: 1, col: 1 }],
+          [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 1, col: 0 }, { row: 1, col: 1 }],
+          [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 1, col: 0 }, { row: 1, col: 1 }]
         ];
         this.color = 0xFFFF00;
-      break;
+        break;
       case "right_L":
         this.matrixPlacements = [
-          [{row:0,col:0}, {row:1,col:0}, {row:1,col:1}, {row:1,col:2}],
-          [{row:0,col:2}, {row:0,col:1}, {row:1,col:1}, {row:2,col:1}],
-          [{row:1,col:0}, {row:1,col:1}, {row:1,col:2}, {row:2,col:2}], 
-          [{row:0,col:1}, {row:1,col:1}, {row:2,col:1}, {row:2,col:0}]
+          [{ row: 0, col: 0 }, { row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
+          [{ row: 0, col: 2 }, { row: 0, col: 1 }, { row: 1, col: 1 }, { row: 2, col: 1 }],
+          [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 2, col: 2 }],
+          [{ row: 0, col: 1 }, { row: 1, col: 1 }, { row: 2, col: 1 }, { row: 2, col: 0 }]
         ];
         this.color = 0x0000FF;
-      break;
+        break;
       case "left_L":
         this.matrixPlacements = [
-          [{row:1,col:0}, {row:1,col:1}, {row:1,col:2}, {row:0,col:2}],
-          [{row:0,col:1}, {row:1,col:1}, {row:2,col:1}, {row:2,col:2}],
-          [{row:2,col:0}, {row:1,col:0}, {row:1,col:1}, {row:1,col:2}], 
-          [{row:0,col:0}, {row:0,col:1}, {row:1,col:1}, {row:2,col:1}]
+          [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 0, col: 2 }],
+          [{ row: 0, col: 1 }, { row: 1, col: 1 }, { row: 2, col: 1 }, { row: 2, col: 2 }],
+          [{ row: 2, col: 0 }, { row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
+          [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 1, col: 1 }, { row: 2, col: 1 }]
         ];
         this.color = 0xFFa500;
-      break;
+        break;
       case "T":
         this.matrixPlacements = [
-          [{row:1,col:0}, {row:1,col:1}, {row:1,col:2}, {row:0,col:1}],
-          [{row:0,col:1}, {row:1,col:1}, {row:2,col:1}, {row:1,col:2}],
-          [{row:1,col:0}, {row:1,col:1}, {row:1,col:2}, {row:2,col:1}], 
-          [{row:0,col:1}, {row:1,col:1}, {row:2,col:1}, {row:1,col:0}]
+          [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 0, col: 1 }],
+          [{ row: 0, col: 1 }, { row: 1, col: 1 }, { row: 2, col: 1 }, { row: 1, col: 2 }],
+          [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 2, col: 1 }],
+          [{ row: 0, col: 1 }, { row: 1, col: 1 }, { row: 2, col: 1 }, { row: 1, col: 0 }]
         ];
         this.color = 0x800080;
-      break;
+        break;
       case "S":
-      this.matrixPlacements = [
-        [{row:1,col:0}, {row:1,col:1}, {row:0,col:1}, {row:0,col:2}],
-        [{row:0,col:1}, {row:1,col:1}, {row:1,col:2}, {row:2,col:2}],
-        [{row:2,col:0}, {row:2,col:1}, {row:1,col:1}, {row:1,col:2}],
-        [{row:0,col:0}, {row:1,col:0}, {row:1,col:1}, {row:2,col:1}]
-      ];
-      this.color = 0x88AA00;
-      break;
+        this.matrixPlacements = [
+          [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 0, col: 1 }, { row: 0, col: 2 }],
+          [{ row: 0, col: 1 }, { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 2, col: 2 }],
+          [{ row: 2, col: 0 }, { row: 2, col: 1 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
+          [{ row: 0, col: 0 }, { row: 1, col: 0 }, { row: 1, col: 1 }, { row: 2, col: 1 }]
+        ];
+        this.color = 0x88AA00;
+        break;
       case "Z":
-      this.matrixPlacements = [
-        [{row:0,col:0}, {row:0,col:1}, {row:1,col:1}, {row:1,col:2}],
-        [{row:0,col:2}, {row:1,col:2}, {row:1,col:1}, {row:2,col:1}],
-        [{row:1,col:0}, {row:1,col:1}, {row:2,col:1}, {row:2,col:2}],
-        [{row:0,col:1}, {row:1,col:1}, {row:1,col:0}, {row:2,col:0}]
-      ];
-      this.color = 0xFF0000;
-      break;
+        this.matrixPlacements = [
+          [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
+          [{ row: 0, col: 2 }, { row: 1, col: 2 }, { row: 1, col: 1 }, { row: 2, col: 1 }],
+          [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 2, col: 1 }, { row: 2, col: 2 }],
+          [{ row: 0, col: 1 }, { row: 1, col: 1 }, { row: 1, col: 0 }, { row: 2, col: 0 }]
+        ];
+        this.color = 0xFF0000;
+        break;
     }
 
     this.drawBlocks();
@@ -85,12 +87,13 @@ class BlockPiece {
     }
     this.rectangles = new Graphics();
     this.rectangles.lineStyle(3, 0x222200, 1);
+    this.rectangles.alpha = this.alpha;
 
     this.rectangles.beginFill(this.color);
 
     this.matrixPlacements[this.currentRotation].forEach(block => {
       this.rectangles.drawRect(
-        block.col * this.blockSize, 
+        block.col * this.blockSize,
         block.row * this.blockSize,
         this.blockSize, this.blockSize); //size
     });
@@ -126,7 +129,7 @@ class BlockPiece {
 
   getCurrentLanes() {
     let lanes = [];
-    for(i = 0; i < 4; i++) {
+    for (i = 0; i < 4; i++) {
       lanes[i] = this.matrixPlacements[this.currentRotation][i].col;
     }
     return lanes;
