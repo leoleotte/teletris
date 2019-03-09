@@ -11,13 +11,16 @@ var Application = PIXI.Application,
 //Game
 var gameRunning = true;
 var inputPointer = { x: 0, y: 0 }
-var pointerDown = true;
+var delta = { x: 0, y: 0 }
+var pointerDown = false;
+var pointerMoved = false;
 var canHold = true;
 var fastFalling = false;
 var canFastFall = true;
 var fastFallTick = 0;
 var keyboardTick = 0;
 var keyboardTickDelay = 8;
+var timeToCleanDelta = 10;
 //Pieces
 var blockTypes = [
   { type: "line", id: 10 },
@@ -85,7 +88,7 @@ document.body.appendChild(app.view);
 var debug = false;
 if (debug) {
   this.debugText = document.getElementById('debugText');
-  this.debugText.textContent = "DEBUG";
+  this.debugText.textContent = "Width: " + window.innerWidth + " - Height: " + window.innerHeight;
 }
 
 //Render the stage
@@ -221,15 +224,6 @@ function drawUI() {
   nextPieceBorderLine.lineTo(11 * this.blockSize, 100 + (blockSize * 9));
   nextPieceBorderLine.lineTo(11 * this.blockSize, 100 + (blockSize * 2));
   app.stage.addChild(nextPieceBorderLine);
-  //hold piece border lines
-  let holdPieceBorderLine = new Graphics();
-  holdPieceBorderLine.lineStyle(4, stageBorderDefaultColor, 2);
-  holdPieceBorderLine.moveTo(11 * this.blockSize, 300 + (blockSize * 5));
-  holdPieceBorderLine.lineTo(16 * this.blockSize, 300 + (blockSize * 5));
-  holdPieceBorderLine.lineTo(16 * this.blockSize, 441 + (blockSize * 9));
-  holdPieceBorderLine.lineTo(11 * this.blockSize, 441 + (blockSize * 9));
-  holdPieceBorderLine.lineTo(11 * this.blockSize, 300 + (blockSize * 5));
-  app.stage.addChild(holdPieceBorderLine);
 }
 
 //Main Loop
@@ -269,6 +263,22 @@ function main(delta) {
   if (keyboardTick >= keyboardTickDelay) {
     keyboardTick = 0;
     movePiece(this.blockPiece, this.keyboardMoveDirection, 0);
+  }
+
+  //delta cleanup
+  if (this.pointerMoved) {
+    this.pointerMoved = false;
+    this.cleanDeltaTick = 0;
+  } else {
+    if (this.cleanDeltaTick >= this.timeToCleanDelta && this.cleanDeltaTick <= this.timeToCleanDelta + 5) {
+      this.delta = { x: 0, y: 0};
+    } else {
+      this.cleanDeltaTick++;
+    }
+
+    if (this.delta) {
+      debugText.textContent = "delta x: " + this.delta.x + " - delta y: " + this.delta.y;
+    }
   }
 
   updateUI(delta);
@@ -315,6 +325,9 @@ function createBlockPiece(hold) {
       solidifyBlocksInsideMatrix();
       clearLines(false);
       this.canHold = true;
+      this.pointerDown = false;
+      this.delta = this.inputPointer;
+      this.fastFalling = false;
     }
     this.blockPiece.delete();
     this.blockPiece = null;
@@ -403,40 +416,49 @@ function inputKeyUp(event) {
 }
 
 function inputPointerDown(event) {
-  this.inputPointer = { x: event.x, y: event.y };
-  this.deltaX = this.deltaY = 0;
-  this.pointerDown = true;
+  inputPointer = { x: Math.round(event.x),  y: Math.round(event.y) };
+  delta = {x : 0, y : 0};
+  pointerDown = true;
 }
 
 function inputPointerMove(event) {
-  if (!this.inputPointer || !this.pointerDown) {
+  pointerMoved = true;
+  if (!inputPointer || !pointerDown || !gameRunning) {
     return;
-  }
-  this.deltaX = this.inputPointer.x - event.x;
-  this.deltaY = this.inputPointer.y - event.y;
-
-  let delta = { x: Math.round(this.inputPointer.x - event.x), y: Math.round(this.inputPointer.y - event.y) };
-  if (!gameRunning || delta.y > 10) {
-    this.inputPointer = { x: event.x, y: event.y };
-    fastFalling = false;
-    return;
-  }
+  }  
 
   // piece movement (drag)
-  if (Math.abs(delta.x) >= 30) {
+  if (Math.abs(delta.x) >= 20 && Math.round(delta.x) != inputPointer.x && delta.y > -50) {
     movePiece(blockPiece, Math.sign(-delta.x), 0);
-    this.inputPointer = { x: event.x, y: event.y };
+    inputPointer = { x: Math.round(event.x),  y: Math.round(event.y) };
+  }
+
+  delta.x = Math.round(inputPointer.x - event.x);
+  delta.y = Math.round(inputPointer.y - event.y);
+
+  //cancel fast fall
+  if (delta.y > 10) {
+    fastFalling = false;
+  }
+
+  //hold
+  if (delta.y > 100) {
+    holdPiece();
   }
 
   //fast fall
   if (delta.y <= -20) {
-    this.inputPointer = { x: event.x, y: event.y };
     fastFalling = true;
+  }
+
+  if (delta.y <= -100) {
+    dropPiece(blockPiece);
+    delta.y = 0;
   }
 }
 
 function inputPointerUp(event) {
-  this.pointerDown = false;
+  pointerDown = false;
   if (fastFalling) {
     fastFalling = false;
     return;
@@ -448,13 +470,12 @@ function inputPointerUp(event) {
   }
 
   //piece drop
-  if (this.deltaY >= 20) {
-    this.deltaY = 0;
+  if (delta.y <= -100) {
     dropPiece(blockPiece);
   }
 
   //piece rotation
-  if (Math.abs(this.deltaX) < 5 && Math.abs(this.deltaY) < 5) {
+  if (Math.abs(delta.x) < 2 && Math.abs(delta.y) < 2) {
     let rotationDirection = null;
     if (event.x > (window.innerWidth / 2) - blockSize * 2 && event.x < (window.innerWidth / 2) + blockSize * 2) {
       rotationDirection = "right";
@@ -465,6 +486,7 @@ function inputPointerUp(event) {
       rotatePiece(rotationDirection);
     }
   }
+  inputPointer = { x: event.x, y: event.y };
 }
 
 function setMatrixPieceBlocks(value) {
