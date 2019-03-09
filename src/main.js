@@ -1,3 +1,5 @@
+var DEBUG = false;
+
 //PIXI Aliases
 var Application = PIXI.Application,
   loader = PIXI.Loader.shared,
@@ -47,7 +49,7 @@ var currentLane = 4;
 var lanes;
 var stageBorderLine;
 var stageBorderDefaultWidth = 4;
-var stageBorderDefaultColor = 0x444444;
+var stageBorderDefaultColor = 0x111100;
 var textStyle = new PIXI.TextStyle({
   fontFamily: "Arial",
   fontSize: 42,
@@ -85,8 +87,7 @@ window.addEventListener('resize', resize);
 document.body.appendChild(app.view);
 
 //debug elements
-var debug = false;
-if (debug) {
+if (DEBUG) {
   this.debugText = document.getElementById('debugText');
   this.debugText.textContent = "Width: " + window.innerWidth + " - Height: " + window.innerHeight;
 }
@@ -165,7 +166,7 @@ function initInput() {
 
 function drawUI() {
   //hold piece button
-  let holdButton = new Graphics();
+  /*let holdButton = new Graphics();
   holdButton.lineStyle(2, 0x555555, 1);
   holdButton.beginFill(0xCCCCCC);
   holdButton.drawRect(0, 0, blockSize * 4, blockSize * 7);
@@ -175,9 +176,20 @@ function drawUI() {
   holdButton.x = 12 * this.blockSize - 25;
   holdButton.y = 230 + (blockSize * 7);
   holdButton.on("pointerdown", function () { holdPiece() })
-  app.stage.addChild(holdButton);
+  app.stage.addChild(holdButton);*/
 
   //dynamic
+  // score background panel
+  let scorePanel = new Graphics();
+  scorePanel.lineStyle(stageBorderDefaultWidth, stageBorderDefaultColor, 1);
+  scorePanel.beginFill(0xDDDDEE);
+  scorePanel.drawRect(0, 0, this.blockSize * 8, this.blockSize * 4 - 10);
+  scorePanel.endFill();
+  scorePanel.x = 10 * this.blockSize + 10;
+  scorePanel.y = 1;
+  app.stage.addChild(scorePanel);
+
+  //score texts
   this.scoreUIText.position.set(10 * this.blockSize + 20, 00);
   app.stage.addChild(this.scoreUIText);
   this.levelUIText.position.set(10 * this.blockSize + 20, 50);
@@ -224,12 +236,22 @@ function drawUI() {
   nextPieceBorderLine.lineTo(11 * this.blockSize, 100 + (blockSize * 9));
   nextPieceBorderLine.lineTo(11 * this.blockSize, 100 + (blockSize * 2));
   app.stage.addChild(nextPieceBorderLine);
+
+  //hold piece border lines
+  let holdPieceBorderLine = new Graphics();
+  holdPieceBorderLine.lineStyle(4, stageBorderDefaultColor, 2);
+  holdPieceBorderLine.moveTo(11 * this.blockSize, 100 + (blockSize * 10));
+  holdPieceBorderLine.lineTo(16 * this.blockSize, 100 + (blockSize * 10));
+  holdPieceBorderLine.lineTo(16 * this.blockSize, 82 + (blockSize * 18));
+  holdPieceBorderLine.lineTo(11 * this.blockSize, 82 + (blockSize * 18));
+  holdPieceBorderLine.lineTo(11 * this.blockSize, 100 + (blockSize * 10));
+  app.stage.addChild(holdPieceBorderLine);
 }
 
 //Main Loop
 function main(delta) {
   if (!this.gameRunning || !blockPiece) {
-    this.gameOverTextUI.position.set(20 + randomInt(1, 5), blockSize * 8 + randomInt(1, 5));
+    this.gameOverTextUI.position.set(blockSize * 2 + randomInt(1, 5), blockSize * 9 + randomInt(1, 5));
     return;
   }
 
@@ -271,12 +293,12 @@ function main(delta) {
     this.cleanDeltaTick = 0;
   } else {
     if (this.cleanDeltaTick >= this.timeToCleanDelta && this.cleanDeltaTick <= this.timeToCleanDelta + 5) {
-      this.delta = { x: 0, y: 0};
+      this.delta = { x: 0, y: 0 };
     } else {
       this.cleanDeltaTick++;
     }
 
-    if (this.delta) {
+    if (this.delta && DEBUG) {
       debugText.textContent = "delta x: " + this.delta.x + " - delta y: " + this.delta.y;
     }
   }
@@ -310,7 +332,7 @@ function updateUI(delta) {
 
     this.blockPiece.getCurrentLanes().forEach(lane => {
       var lane_ = this.lanes[this.blockPiece.posX + lane];
-      lane_.alpha = 0.25;
+      lane_.alpha = 0.10;
       lane_.graphicsData[0].fillColor = this.blockPiece.color;
       lane_.graphicsData[0].lineWidth = 1;
       lane_.dirty++;
@@ -322,8 +344,6 @@ function updateUI(delta) {
 function createBlockPiece(hold) {
   if (this.blockPiece) {
     if (!hold) {
-      solidifyBlocksInsideMatrix();
-      clearLines(false);
       this.canHold = true;
       this.pointerDown = false;
       this.delta = this.inputPointer;
@@ -416,8 +436,8 @@ function inputKeyUp(event) {
 }
 
 function inputPointerDown(event) {
-  inputPointer = { x: Math.round(event.x),  y: Math.round(event.y) };
-  delta = {x : 0, y : 0};
+  inputPointer = { x: Math.round(event.x), y: Math.round(event.y) };
+  delta = { x: 0, y: 0 };
   pointerDown = true;
 }
 
@@ -425,12 +445,12 @@ function inputPointerMove(event) {
   pointerMoved = true;
   if (!inputPointer || !pointerDown || !gameRunning) {
     return;
-  }  
+  }
 
   // piece movement (drag)
   if (Math.abs(delta.x) >= 20 && Math.round(delta.x) != inputPointer.x && delta.y > -50) {
     movePiece(blockPiece, Math.sign(-delta.x), 0);
-    inputPointer = { x: Math.round(event.x),  y: Math.round(event.y) };
+    inputPointer = { x: Math.round(event.x), y: Math.round(event.y) };
   }
 
   delta.x = Math.round(inputPointer.x - event.x);
@@ -548,14 +568,19 @@ function dropPiece(piece) {
     }
   }
 
-  //UI border lines effect
   if (piece.active) {
+    //UI border lines effect
     setStageBorderStyleEffect(10, 1)
     this.stageBorderLine.graphicsData[0].lineColor = piece.color;
 
     setMatrixPieceBlocks(piece.blockInfo.id);
-    createBlockPiece(false);
+    checkForLines();
   }
+}
+
+function checkForLines() {
+  solidifyBlocksInsideMatrix();
+  clearLines(false);
 }
 
 function rotatePiece(rotationDirection) {
@@ -638,20 +663,37 @@ function clearLines(clearAll) {
       //only moves lines down and show effects if it's not cleaning all blocks
       if (!clearAll) {
         delayedPullLinesDown(line, linesCleared);
+      } else {
+        linesCleared = 0;
       }
     }
   }
 
   if (linesCleared > 0) {
+    console.log(linesCleared);
     addLinesScore(linesCleared);
+    delayedCreateBlocKPiece(linesCleared);
     linesCleared = 0;
+  } else {
+    createBlockPiece(false);
   }
 }
 
 async function delayedPullLinesDown(line, linesCleared) {
-  await sleep(300);
+  await sleep(linesCleared * 150);
+  if (!gameRunning) {
+    return;
+  }
   pullLinesDown(line);
   setStageBorderStyleEffect(linesCleared * 10, 2);
+}
+
+async function delayedCreateBlocKPiece(linesCleared) {
+  await sleep(linesCleared * 150);
+  if (!gameRunning) {
+    return;
+  }
+  createBlockPiece(false);
 }
 
 //moves down every line above the deleted one
@@ -672,11 +714,11 @@ function addLinesScore(lines) {
   this.level.lines += lines;
   this.linesUIText.text = ("Lines: " + this.level.lines);
 
-  this.level.level = Math.floor(this.level.lines / 10) + 1;
-  this.levelUIText.text = ("Level: " + this.level.level);
-
   this.level.score += this.level.pointsPerLine[lines - 1] * this.level.level;
   this.scoreUIText.text = ("Score: " + this.level.score);
+
+  this.level.level = Math.floor(this.level.lines / 10) + 1;
+  this.levelUIText.text = ("Level: " + this.level.level);
 }
 
 function setStageBorderStyleEffect(width, alpha) {
