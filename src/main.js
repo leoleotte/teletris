@@ -23,15 +23,16 @@ var fastFallTick = 0;
 var keyboardTick = 0;
 var keyboardTickDelay = 8;
 var timeToCleanDelta = 10;
+var randomPieceBag = [];
 //Pieces
 var blockTypes = [
-  { type: "line", id: 10 },
-  { type: "square", id: 20 },
-  { type: "left_L", id: 60 },
-  { type: "right_L", id: 70 },
-  { type: "T", id: 30 },
-  { type: "S", id: 40 },
-  { type: "Z", id: 50 }
+  { type: "line", id: 10, UIoffset: -0.5 },
+  { type: "square", id: 20, UIoffset: 0.5 },
+  { type: "left_L", id: 60, UIoffset: 0 },
+  { type: "right_L", id: 70, UIoffset: 0 },
+  { type: "T", id: 30, UIoffset: 0 },
+  { type: "S", id: 40, UIoffset: 0 },
+  { type: "Z", id: 50, UIoffset: 0 }
 ];
 var blockPiece, nextPiece, blockPieceHold, previewBlockPiece;
 var blockSize = 40;
@@ -102,10 +103,18 @@ initInput();
 drawUI();
 initGame();
 
+function clearBlocksMatrix() {
+  blocksMatrix = [];
+  for (let i = 0; i < this.blocksMatrixSize.x; i++) {
+    blocksMatrix[i] = [];
+  }
+}
+
 function initGame() {
   createNextPiece();
   if (blocksMatrix) { //if game was restared
-    this.clearLines(true);
+    clearLines(true);
+    clearBlocksMatrix();
     app.stage.removeChild(gameOverTextUI);
     this.blockPiece.delete();
     this.blockPiece = undefined;
@@ -118,10 +127,7 @@ function initGame() {
     this.linesUIText.text = ("Lines: " + this.level.lines);
   }
 
-  blocksMatrix = [];
-  for (let i = 0; i < blocksMatrixSize.x; i++) {
-    blocksMatrix[i] = [];
-  }
+  clearBlocksMatrix();
   this.createBlockPiece(false);
   this.gameRunning = true;
 }
@@ -303,6 +309,11 @@ function main(delta) {
     }
   }
 
+  //removed blocks effects
+  if (this.blocksRemovedForEffects) {
+    animateRemovedBlocks(delta);
+  }
+
   updateUI(delta);
 }
 
@@ -381,7 +392,23 @@ function createNextPiece() {
   if (this.nextPiece) {
     this.nextPiece.delete();
   }
-  this.nextPiece = new BlockPiece(this.blockTypes[randomInt(0, 6)], 12, 7, this.blockSize);
+
+  let nextPieceType;
+  if (this.randomPieceBag.length > 0) {
+    nextPieceType = this.randomPieceBag.pop();
+  } else {
+    createRandomPieceBag();
+    nextPieceType = this.randomPieceBag.pop();
+  }
+  this.nextPiece = new BlockPiece(this.blockTypes[nextPieceType], 12 + this.blockTypes[nextPieceType].UIoffset, 7, this.blockSize);
+}
+
+function createRandomPieceBag() {
+  this.randomPieceBag = [7];
+  this.remainingPieces = [0, 1, 2, 3, 4, 5, 6];
+  for (let i = 6; i >= 0; i--) {
+    this.randomPieceBag[i] = remainingPieces.splice(randomInt(0, i), 1);
+  }
 }
 
 //////Input
@@ -402,20 +429,23 @@ function inputKeyDown(event) {
       keyboardMove = true;
       keyboardTick = keyboardTickDelay;
       break;
-    case "ArrowUp":
-      dropPiece(blockPiece);
-      break;
     case "ArrowDown":
       fastFalling = true;
       break;
+    case "Shift":
+      holdPiece();
+      break;
+    case "c":
+      holdPiece();
+      break;
   }
   //rotation input
-  if (event.key == 'e' || event.key == 'r') {
-    rotatePiece(event.key == 'e' ? "left" : "right");
+  if (event.key == 'z' || event.key == 'x' || event.key == 'ArrowUp') {
+    rotatePiece(event.key == 'z' ? "left" : "right");
   }
 
-  if (event.key == "d") {
-    holdPiece();
+  if (event.which == 32) {
+    dropPiece(blockPiece);
   }
 }
 
@@ -570,7 +600,7 @@ function dropPiece(piece) {
 
   if (piece.active) {
     //UI border lines effect
-    setStageBorderStyleEffect(10, 1)
+    setStageBorderStyleEffect(10, 1);
     this.stageBorderLine.graphicsData[0].lineColor = piece.color;
 
     setMatrixPieceBlocks(piece.blockInfo.id);
@@ -579,7 +609,6 @@ function dropPiece(piece) {
 }
 
 function checkForLines() {
-  solidifyBlocksInsideMatrix();
   clearLines(false);
 }
 
@@ -609,7 +638,7 @@ function holdPiece() {
     this.blockPieceHold.delete();
     this.blockPieceHold = null;
   }
-  this.blockPieceHold = new BlockPiece(blockInfo, 12, 15, this.blockSize);
+  this.blockPieceHold = new BlockPiece(blockInfo, 12 + blockInfo.UIoffset, 15, this.blockSize);
   this.canHold = false;
 
 }
@@ -634,9 +663,15 @@ function solidifyBlocksInsideMatrix() {
   });
 }
 
+let blocksRemovedForEffects;
+
 function clearLines(clearAll) {
+  if (!clearAll) {
+    solidifyBlocksInsideMatrix();
+  }
   let linesCleared = 0;
   let blocksPerLine = [];
+  clearBlocksRemovedForEffects();
   //initialize blocksPerLine array, filling it with max values if 'clearAll' is set
   for (let row = 0; row < blocksMatrixSize.y; row++) {
     blocksPerLine.push(clearAll ? blocksMatrixSize.y : 0);
@@ -652,48 +687,69 @@ function clearLines(clearAll) {
     }
   }
 
-  //tests for number of blocks in line, or if it should clear all lines
+  //tests for number of blocks in line
   for (let line = 0; line < this.blocksMatrixSize.y; line++) {
     if (blocksPerLine[line] >= this.blocksMatrixSize.x) {
       for (let collumn = 0; collumn < this.blocksMatrixSize.x; collumn++) {
-        app.stage.removeChild(blocksMatrix[collumn][line]);
+        this.blocksRemovedForEffects[collumn][line] = blocksMatrix[collumn][line];
         blocksMatrix[collumn][line] = undefined;
       }
       linesCleared++;
       //only moves lines down and show effects if it's not cleaning all blocks
       if (!clearAll) {
-        delayedPullLinesDown(line, linesCleared);
+        pullLinesDown(line);
       } else {
+        this.canAnimateRemovedBlocks = true;
         linesCleared = 0;
       }
     }
   }
 
   if (linesCleared > 0) {
-    console.log(linesCleared);
     addLinesScore(linesCleared);
-    delayedCreateBlocKPiece(linesCleared);
+    createBlockPiece(false);
+    this.canAnimateRemovedBlocks = true;
+    setStageBorderStyleEffect(20, 2);
     linesCleared = 0;
-  } else {
+  } else if (!clearAll) {
     createBlockPiece(false);
   }
 }
 
-async function delayedPullLinesDown(line, linesCleared) {
-  await sleep(linesCleared * 150);
-  if (!gameRunning) {
-    return;
+let removedBlocksAlpha = 0.7;
+let canAnimateRemovedBlocks = false;
+
+function animateRemovedBlocks(delta) {
+  if (this.canAnimateRemovedBlocks) {
+    removedBlocksAlpha -= delta * 0.05;
+
+    for (let line = 0; line < this.blocksMatrixSize.y; line++) {
+      for (let collumn = 0; collumn < this.blocksMatrixSize.x; collumn++) {
+        if (this.blocksRemovedForEffects[collumn][line]) {
+          let block = this.blocksRemovedForEffects[collumn][line];
+          block.alpha = removedBlocksAlpha;
+          block.y += delta * 5;
+          if (removedBlocksAlpha <= 0) {
+            app.stage.removeChild(this.blocksRemovedForEffects[collumn][line]);
+          }
+        }
+      }
+    }
+
+    if (removedBlocksAlpha <= 0) {
+      this.blocksRemovedForEffects = undefined;
+      removedBlocksAlpha = 0.7;
+      this.canAnimateRemovedBlocks = false;
+      return;
+    }
   }
-  pullLinesDown(line);
-  setStageBorderStyleEffect(linesCleared * 10, 2);
 }
 
-async function delayedCreateBlocKPiece(linesCleared) {
-  await sleep(linesCleared * 150);
-  if (!gameRunning) {
-    return;
+function clearBlocksRemovedForEffects() {
+  this.blocksRemovedForEffects = [];
+  for (let i = 0; i < this.blocksMatrixSize.x; i++) {
+    this.blocksRemovedForEffects[i] = [];
   }
-  createBlockPiece(false);
 }
 
 //moves down every line above the deleted one
