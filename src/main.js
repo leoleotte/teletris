@@ -11,33 +11,38 @@ var Application = PIXI.Application,
   Text = PIXI.Text;
 
 //Game
-var gameRunning = true;
+var gameRunning = false;
+var gameOver = false;
+var showingTutorial = false;
+
 var inputPointer = { x: 0, y: 0 }
 var delta = { x: 0, y: 0 }
 var pointerDown = false;
 var pointerMoved = false;
+
 var canHold = true;
 var fastFalling = false;
 var canFastFall = true;
 var fastFallTick = 0;
+
 var keyboardTick = 0;
 var keyboardTickDelay = 8;
 var timeToCleanDelta = 10;
-var randomPieceBag = [];
 //Pieces
 var blockTypes = [
-  { type: "line", id: 10, UIoffset: -0.5 },
-  { type: "square", id: 20, UIoffset: 0.5 },
-  { type: "left_L", id: 60, UIoffset: 0 },
-  { type: "right_L", id: 70, UIoffset: 0 },
-  { type: "T", id: 30, UIoffset: 0 },
-  { type: "S", id: 40, UIoffset: 0 },
-  { type: "Z", id: 50, UIoffset: 0 }
+  { type: "line", id: 10, UIoffset: -0.5, spawnCollumn: 3 },
+  { type: "square", id: 20, UIoffset: 0.5, spawnCollumn: 4 },
+  { type: "left_L", id: 60, UIoffset: 0, spawnCollumn: 3 },
+  { type: "right_L", id: 70, UIoffset: 0, spawnCollumn: 3 },
+  { type: "T", id: 30, UIoffset: 0, spawnCollumn: 3 },
+  { type: "S", id: 40, UIoffset: 0, spawnCollumn: 3 },
+  { type: "Z", id: 50, UIoffset: 0, spawnCollumn: 3 }
 ];
 var blockPiece, nextPiece, blockPieceHold, previewBlockPiece;
 var blockSize = 40;
 var blocksMatrixSize = { x: 10, y: 20 };
-let blocksMatrix;
+var blocksMatrix;
+var randomPieceBag = [];
 //Difficulty
 var autoMoveCurrentTime = 0;
 var fastFallLimitTime = 4;
@@ -52,9 +57,14 @@ var stageBorderLine;
 var stageBorderDefaultWidth = 4;
 var stageBorderDefaultColor = 0x111100;
 var textStyle = new PIXI.TextStyle({
-  fontFamily: "Arial",
+  fontFamily: "Verdana",
   fontSize: 42,
   fill: "green"
+});
+var tutorialTextStyle = new PIXI.TextStyle({
+  fontFamily: "Verdana",
+  fontSize: 32,
+  fill: "#222222"
 });
 var gameOverTextUI = new Text("GAME OVER", textStyle);
 var scoreUIText = new Text("Score: 0", textStyle);
@@ -96,12 +106,77 @@ if (DEBUG) {
 //Render the stage
 app.renderer.render(app.stage);
 
+showTutorial();
+
 //Start the game loop by adding the `gameLoop` function to
 //Pixi's `ticker` and providing it with a `delta` argument.
 app.ticker.add(delta => main(delta));
-initInput();
-drawUI();
-initGame();
+app.ticker.add(delta => refreshRemoveBlocksEffects(delta));
+
+async function initGame() {
+  this.gameOver = false;
+  if (blocksMatrix) { //if game was restared
+    clearLines(true);
+    clearBlocksMatrix();
+
+    app.stage.removeChild(gameOverTextUI);
+    this.level.score = 0;
+    this.level.level = 1;
+    this.level.lines = 0;
+    this.scoreUIText.text = ("Score: " + this.level.score);
+    this.levelUIText.text = ("Level: " + this.level.level);
+    this.linesUIText.text = ("Lines: " + this.level.lines);
+
+    if (this.blockPiece) {
+      this.blockPiece.delete();
+      this.blockPiece = undefined;
+    }
+    if (this.previewBlockPiece) {
+      this.previewBlockPiece.delete();
+      this.previewBlockPiece = undefined;
+    }
+    if (this.nextPiece) {
+      this.nextPiece.delete();
+      this.nextPiece = undefined;
+    }
+    if (this.blockPieceHold) {
+      this.blockPieceHold.delete();
+      this.blockPieceHold = undefined;
+    }
+    updateUI(200);
+  } else {
+    initInput();
+    drawUI();
+  }
+
+  //begin countdown
+  var beginGameCountdownText = new Text("3", tutorialTextStyle);
+  beginGameCountdownText.style.fontSize = 96;
+  beginGameCountdownText.style.fill = "#446666";
+  beginGameCountdownText.x = this.blockSize * 5 - 10;
+  beginGameCountdownText.y = this.blockSize * 10;
+  app.stage.addChild(beginGameCountdownText);
+  await sleep(1000);
+  beginGameCountdownText.text = "2";
+  beginGameCountdownText.style.fontSize = 136;
+  beginGameCountdownText.style.fill = "#883333";
+  beginGameCountdownText.x -= 16;
+  beginGameCountdownText.y -= 16;
+  await sleep(1000);
+  beginGameCountdownText.text = "1";  
+  beginGameCountdownText.style.fontSize = 176;
+  beginGameCountdownText.style.fill = "#DD0000";
+  beginGameCountdownText.x -= 16;
+  beginGameCountdownText.y -= 16;
+  await sleep(1000);  
+  app.stage.removeChild(beginGameCountdownText);
+  //end countdown
+
+  createRandomPieceBag();
+  clearBlocksMatrix();
+  this.createBlockPiece(false);
+  this.gameRunning = true;
+}
 
 function clearBlocksMatrix() {
   blocksMatrix = [];
@@ -110,29 +185,8 @@ function clearBlocksMatrix() {
   }
 }
 
-function initGame() {
-  createNextPiece();
-  if (blocksMatrix) { //if game was restared
-    clearLines(true);
-    clearBlocksMatrix();
-    app.stage.removeChild(gameOverTextUI);
-    this.blockPiece.delete();
-    this.blockPiece = undefined;
-
-    this.level.score = 0;
-    this.level.level = 1;
-    this.level.lines = 0;
-    this.scoreUIText.text = ("Score: " + this.level.score);
-    this.levelUIText.text = ("Level: " + this.level.level);
-    this.linesUIText.text = ("Lines: " + this.level.lines);
-  }
-
-  clearBlocksMatrix();
-  this.createBlockPiece(false);
-  this.gameRunning = true;
-}
-
 function endGame() {
+  this.gameOver = true;
   this.gameRunning = false;
   this.gameOverTextUI.position.set(20, 10);
   app.stage.addChild(this.gameOverTextUI);
@@ -170,19 +224,50 @@ function initInput() {
   }
 }
 
+function showTutorial() {
+  //listener for quick close tutorial on keyboard
+  document.addEventListener('keydown', function () {
+    if (!gameRunning && showingTutorial) {
+        closeTutorial();
+    }
+  });
+  this.showingTutorial = true;
+  this.tutorialImage = Sprite.fromImage('rsc/tutorial.png')
+  this.tutorialImage.x = 200;
+  this.tutorialImage.y = 50;
+  app.stage.addChild(this.tutorialImage);
+
+  this.tutorialButton = new Graphics();
+  this.tutorialButton.lineStyle(3, 0x222200, 1);
+  this.tutorialButton.beginFill(0xEEEEEE);
+  this.tutorialButton.drawRect(0,0,200,50);
+  this.tutorialButton.endFill();
+  this.tutorialButton.x = (this.blockSize * 5) + 100;
+  this.tutorialButton.y = (this.blockSize * 10);
+  this.tutorialButton.interactive = true;
+  this.tutorialButton.buttonMode = true;
+  this.tutorialButton.on("pointerdown", closeTutorial);
+  app.stage.addChild(this.tutorialButton);
+
+  this.tutorialTitleText = new Text("TELETRIS", tutorialTextStyle);
+  this.tutorialTitleText.position.set((this.blockSize * 5) + 140, 0);
+  app.stage.addChild(this.tutorialTitleText);
+
+  this.tutorialPlayText = new Text("PLAY", tutorialTextStyle);
+  this.tutorialPlayText.position.set((this.blockSize * 5) + 160, (this.blockSize * 10) + 5);
+  app.stage.addChild(this.tutorialPlayText);
+}
+
+function closeTutorial() {
+  this.showingTutorial = false;
+  app.stage.removeChild(tutorialImage);
+  app.stage.removeChild(tutorialButton);
+  app.stage.removeChild(tutorialPlayText);
+  app.stage.removeChild(tutorialTitleText);
+  initGame();
+}
+
 function drawUI() {
-  //hold piece button
-  /*let holdButton = new Graphics();
-  holdButton.lineStyle(2, 0x555555, 1);
-  holdButton.beginFill(0xCCCCCC);
-  holdButton.drawRect(0, 0, blockSize * 4, blockSize * 7);
-  holdButton.endFill();
-  holdButton.interactive = true;
-  holdButton.button = true;
-  holdButton.x = 12 * this.blockSize - 25;
-  holdButton.y = 230 + (blockSize * 7);
-  holdButton.on("pointerdown", function () { holdPiece() })
-  app.stage.addChild(holdButton);*/
 
   //dynamic
   // score background panel
@@ -293,7 +378,7 @@ function main(delta) {
     movePiece(this.blockPiece, this.keyboardMoveDirection, 0);
   }
 
-  //delta cleanup
+  //delta touch drag cleanup (FIXME: can cause unwanted rotation)
   if (this.pointerMoved) {
     this.pointerMoved = false;
     this.cleanDeltaTick = 0;
@@ -309,12 +394,15 @@ function main(delta) {
     }
   }
 
+  updateUI(delta);
+}
+
+function refreshRemoveBlocksEffects(delta) {
   //removed blocks effects
   if (this.blocksRemovedForEffects) {
     animateRemovedBlocks(delta);
   }
 
-  updateUI(delta);
 }
 
 function updateUI(delta) {
@@ -326,8 +414,8 @@ function updateUI(delta) {
     this.stageBorderLine.alpha -= delta * 0.1;
   }
 
-  //Lane effects on blockPiece lanes
-  if (this.blockPiece && this.lanes) {
+  //default Lane effects
+  if (this.lanes) {
     for (i = 0; i < 10; i++) {
       lane = this.lanes[i];
       lane.graphicsData[0].fillColor = 0xFFFFFF;
@@ -340,7 +428,10 @@ function updateUI(delta) {
       lane.dirty++;
       lane.clearDirty++;
     };
+  }
 
+  //Lane effects on blockPiece lanes
+  if (this.blockPiece && this.lanes) {
     this.blockPiece.getCurrentLanes().forEach(lane => {
       var lane_ = this.lanes[this.blockPiece.posX + lane];
       lane_.alpha = 0.10;
@@ -364,15 +455,19 @@ function createBlockPiece(hold) {
     this.blockPiece = null;
   }
 
+  if (!this.nextPiece) {
+    createNextPiece();
+  }
+
   //chooses between holdPiece or nextPiece for the new blockPiece
   let nextBlockType = (hold && this.blockPieceHold) ? this.blockPieceHold.blockInfo : this.nextPiece.blockInfo;
-  this.blockPiece = new BlockPiece(nextBlockType, 4, 0, this.blockSize);
+  this.blockPiece = new BlockPiece(nextBlockType, nextBlockType.spawnCollumn, 0, this.blockSize);
   this.blockPiece.active = true;
   //preview block
   if (this.previewBlockPiece) {
     this.previewBlockPiece.delete();
   }
-  this.previewBlockPiece = new BlockPiece(nextBlockType, 4, 0, this.blockSize);
+  this.previewBlockPiece = new BlockPiece(nextBlockType, nextBlockType.spawnCollumn, 0, this.blockSize);
   this.previewBlockPiece.alpha = 0.2;
   this.previewBlockPiece.drawBlocks();
 
@@ -413,8 +508,13 @@ function createRandomPieceBag() {
 
 //////Input
 function inputKeyDown(event) {
-  if (!gameRunning) { //restarts the game if it's over
+   //restarts the game if it's over
+  if (gameOver) {
     initGame();
+    return;
+  }
+
+  if (!gameRunning) {
     return;
   }
 
@@ -513,9 +613,14 @@ function inputPointerUp(event) {
     fastFalling = false;
     return;
   }
+
   //restarts the game if it's over
-  if (!gameRunning) {
+  if (gameOver) {
     initGame();
+    return;
+  }
+
+  if (!gameRunning) {
     return;
   }
 
@@ -622,7 +727,7 @@ function rotatePiece(rotationDirection) {
   }
   //updates the preview block
   this.previewBlockPiece.rotate(nextRotation);
-  this.previewBlockPiece.move(0, -1);
+  this.previewBlockPiece.move(0, -2);
   dropPiece(this.previewBlockPiece);
 
   animateLanesRotation(rotationDirection);
@@ -695,7 +800,6 @@ function clearLines(clearAll) {
         blocksMatrix[collumn][line] = undefined;
       }
       linesCleared++;
-      //only moves lines down and show effects if it's not cleaning all blocks
       if (!clearAll) {
         pullLinesDown(line);
       } else {
